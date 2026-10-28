@@ -112,10 +112,40 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
       }
     }
     const id = room.tile.id;
-    if (/stairs|staircase|landing/.test(id)) {
+    if (id === 'entrance-hall') {
+      // A tall front door and transom on the exterior wall make the entrance legible.
+      box(inside, -1.37, .64, 0, .09, 1.02, 1.05, '#49372c');
+      for (const z of [-.27, .27]) {
+        box(inside, -1.31, .62, z, .04, .82, .46, '#6b4934');
+        box(inside, -1.28, .62, z, .025, .55, .33, '#805a3c');
+        box(inside, -1.25, .62, z > 0 ? .07 : -.07, .04, .06, .06, '#d1b477');
+      }
+      box(inside, -1.34, 1.22, 0, .1, .16, 1.16, '#94a9a0');
+      for (const z of [-.6, .6]) box(inside, -1.35, .69, z, .18, 1.2, .12, '#c0ad8d');
+      box(inside, -.65, .145, 0, 1.15, .025, .8, '#6f3e39');
+      box(inside, -.65, .16, 0, .95, .012, .6, '#967056');
+    } else if (id === 'foyer') {
+      // A tiled medallion and corner pillars distinguish the central crossroads.
+      box(inside, 0, .145, 0, 1.5, .025, 1.5, '#b5a583');
+      for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++)
+        box(inside, x * .46, .165, z * .46, .42, .015, .42, (x + z) % 2 ? '#514d43' : '#d0c2a1');
+      for (const x of [-1.18, 1.18]) for (const z of [-1.18, 1.18]) {
+        box(inside, x, .49, z, .17, .72, .17, '#c5b99e');
+        box(inside, x, .86, z, .25, .08, .25, '#dacbb0');
+      }
+      box(inside, 0, .2, 0, .32, .06, .32, '#967c4e').rotation.y = Math.PI / 4;
+    } else if (/stairs|staircase|landing/.test(id)) {
       for (let i = 0; i < 6; i++) {
         if (descending) box(inside, 0, .04 - i * .11, .6 - i * .23, .95, .08, .24, '#b7aa8a');
         else box(inside, 0, .2 + i * .07, .6 - i * .23, .95, .14 + i * .14, .24, '#b7aa8a');
+      }
+      if (id === 'grand-staircase') {
+        for (const x of [-.59, .59]) {
+          for (let i = 0; i < 4; i++) box(inside, x, .38 + i * .09, .55 - i * .38, .07, .45, .07, '#66513a');
+          const rail = box(inside, x, .66, -.03, .1, .09, 1.65, '#8c6b45');
+          rail.rotation.x = -.28;
+        }
+        box(inside, 0, .82, -.9, 1.35, .14, .36, '#8c765a');
       }
     } else if (/bed|nursery|quarters/.test(id)) {
       box(inside, -.35, .3, -.15, 1.1, .35, 1.65, '#51473c'); box(inside, -.35, .52, -.15, 1.05, .15, 1.55, '#647b78'); box(inside, -.35, .63, -.68, .8, .12, .35, '#d3c9aa');
