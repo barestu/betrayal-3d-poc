@@ -5,7 +5,7 @@ import { Room, Door, Card, Deck, Floor, rotated, openings } from './model';
 const colors = { item: '#b89b60', event: '#7997a4', omen: '#a884b6' };
 const symbols = { item: '◇', event: '≋', omen: '☾' };
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onDeck: (deck: Deck) => void, onHover: (room: Room | null, x?: number, y?: number) => void) {
+export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onDeck: (deck: Deck) => void, onHover: (room: Room | null, x?: number, y?: number) => void, onRoom: (room: Room) => void) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#111a1c');
   scene.fog = new THREE.Fog('#111a1c', 30, 70);
@@ -236,9 +236,10 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     if (blocked || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;
     const bounds = renderer.domElement.getBoundingClientRect(); pointer.set((e.clientX - bounds.left) / bounds.width * 2 - 1, -(e.clientY - bounds.top) / bounds.height * 2 + 1);
     ray.setFromCamera(pointer, camera);
-    const hit = ray.intersectObjects([...markers.children, ...decks.children], true)[0];
-    if (!hit) return; let object: THREE.Object3D | null = hit.object;
-    while (object) { if (object.userData.door) { onDoor(object.userData.door); break; } if (object.userData.deck) { onDeck(object.userData.deck); break; } object = object.parent; }
+    const hit = ray.intersectObjects([...markers.children, ...decks.children, ...board.children], true)[0];
+    if (!hit) return;
+    let object: THREE.Object3D | null = hit.object;
+    while (object) { if (object.userData.door) { onDoor(object.userData.door); break; } if (object.userData.deck) { onDeck(object.userData.deck); break; } if (object.userData.room) { onRoom(object.userData.room); break; } object = object.parent; }
   };
   renderer.domElement.addEventListener('pointerdown', pointerDown); renderer.domElement.addEventListener('pointerup', pointerUp);
   renderer.domElement.addEventListener('pointermove', pointerMove); renderer.domElement.addEventListener('pointerleave', pointerLeave);

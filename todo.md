@@ -1,4 +1,3 @@
-- click staircase move to upper ground
 - add popup explore when move into unexplored room
 - add char model & exploration animation
 - improve 3d model quality & make it more vary (e.g. entrance needs to look like entrance)

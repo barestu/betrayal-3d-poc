@@ -87,7 +87,10 @@ function App() {
   function floor(value: Floor) { const s = state.current; if (s.busy || s.card || s.preview) return; s.floor = value; refresh(); scene.current?.frame(); }
   const actions = useRef({ rotate, place, cancelPreview, dismiss }); actions.current = { rotate, place, cancelPreview, dismiss };
   useEffect(() => {
-    scene.current = createScene(host.current!, discover, draw, (room, x, y) => setHovered(room && x !== undefined && y !== undefined ? { room, x, y } : null)); refresh(); scene.current.frame();
+    scene.current = createScene(host.current!, discover, draw, (room, x, y) => setHovered(room && x !== undefined && y !== undefined ? { room, x, y } : null), room => {
+      if (room.tile.id === 'grand-staircase') floor('upper');
+      else if (room.tile.id === 'upper-landing') floor('ground');
+    }); refresh(); scene.current.frame();
     const held = new Set<string>();
     let previous = performance.now(), animation = 0;
     const tick = (now: number) => {
