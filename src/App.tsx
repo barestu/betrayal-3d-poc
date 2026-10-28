@@ -27,6 +27,7 @@ function Minimap({ rooms, floor }: { rooms: Room[]; floor: Floor }) {
 }
 function App() {
   const host = useRef<HTMLDivElement>(null);
+  const performanceDisplay = useRef<HTMLDivElement>(null);
   const scene = useRef<ReturnType<typeof createScene>>();
   const state = useRef(initial());
   const [hovered, setHovered] = useState<{ room: Room; x: number; y: number } | null>(null);
@@ -106,9 +107,15 @@ function App() {
       }, () => { s.busy = false; s.message = 'No connected path to that room.'; refresh(); });
     }, (x, y) => setExploreHint(x !== undefined && y !== undefined ? { x, y } : null)); refresh(); scene.current.frame();
     const held = new Set<string>();
-    let previous = performance.now(), animation = 0;
+    let previous = performance.now(), animation = 0, sampleStart = previous, frames = 0;
     const tick = (now: number) => {
       const delta = Math.min((now - previous) / 1000, .05); previous = now;
+      frames++;
+      if (now - sampleStart >= 1000) {
+        const memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
+        if (performanceDisplay.current) performanceDisplay.current.textContent = `${Math.round(frames * 1000 / (now - sampleStart))} FPS · JS heap ${memory ? `${Math.round(memory.usedJSHeapSize / 1048576)} MB` : "unavailable"}`;
+        frames = 0; sampleStart = now;
+      }
       if (!state.current.busy && !state.current.card) {
         const axis = (positive: string, negative: string) => Number(held.has(positive)) - Number(held.has(negative));
         const forward = axis('w', 's'), right = axis('d', 'a');
@@ -143,6 +150,7 @@ function App() {
   const locked = s.busy || !!s.card || !!s.preview;
   return <main>
     <div ref={host} className="scene" />
+    <div ref={performanceDisplay} className="performance-display" aria-label="Performance">FPS · JS heap unavailable</div>
     {exploreHint && !locked && <div className="explore-hint" style={{ left: Math.min(exploreHint.x + 16, window.innerWidth - 150), top: Math.max(8, exploreHint.y - 40) }}>Click to explore</div>}
     {hovered && !s.preview && !s.card && !s.busy && hovered.room.floor === s.floor && <section className="room-hover panel" style={{ left: Math.min(hovered.x + 16, window.innerWidth - 300), top: Math.max(8, Math.min(hovered.y + 16, window.innerHeight - 220)) }}><small>ROOM INFORMATION</small><h2>{hovered.room.tile.name}</h2>{hovered.room.tile.blurb && <p>{hovered.room.tile.blurb}</p>}{hovered.room.tile.rules && <p>{hovered.room.tile.rules}</p>}{hovered.room.tile.cardIcon && <small><span className={`room-card-icon ${hovered.room.tile.cardIcon}`}>{hovered.room.tile.cardIcon === 'item' ? '◇' : hovered.room.tile.cardIcon === 'event' ? '≋' : '☾'}</span> DRAW {hovered.room.tile.cardIcon.toUpperCase()}</small>}</section>}
     <header>

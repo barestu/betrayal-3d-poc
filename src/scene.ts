@@ -16,6 +16,13 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   host.appendChild(renderer.domElement);
+  const cardScene = new THREE.Scene();
+  cardScene.add(new THREE.HemisphereLight('#ffffff', '#777777', 2));
+  const cardRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  cardRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  cardRenderer.outputColorSpace = THREE.SRGBColorSpace;
+  cardRenderer.domElement.className = 'card-layer';
+  host.appendChild(cardRenderer.domElement);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.maxPolarAngle = Math.PI / 2.3;
@@ -265,7 +272,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     });
   }
   function draw(card: Card, done: () => void) {
-    const group = new THREE.Group(); activeCard = group; scene.add(group);
+    const group = new THREE.Group(); activeCard = group; cardScene.add(group);
     const canvas = document.createElement('canvas'); canvas.width = 600; canvas.height = 840;
     const ctx = canvas.getContext('2d')!;
     ctx.fillStyle = '#e5dcc4'; ctx.fillRect(0, 0, 600, 840); ctx.strokeStyle = colors[card.type]; ctx.lineWidth = 12; ctx.strokeRect(22, 22, 556, 796);
@@ -294,9 +301,9 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   function dismiss(done: () => void) {
     if (!activeCard) { done(); return; }
     const object = activeCard, start = object.position.clone();
-    animate(object, 500, t => { object.position.lerpVectors(start, new THREE.Vector3(7, .2, 5.8 + decks.position.z), t * t); object.scale.setScalar(1 - t * .5); }, () => { scene.remove(object); clear(object); activeCard = undefined; controls.enabled = true; done(); });
+    animate(object, 500, t => { object.position.lerpVectors(start, new THREE.Vector3(7, .2, 5.8 + decks.position.z), t * t); object.scale.setScalar(1 - t * .5); }, () => { cardScene.remove(object); clear(object); activeCard = undefined; controls.enabled = true; done(); });
   }
-  function cancel() { moving = undefined; if (activeCard) { scene.remove(activeCard); clear(activeCard); activeCard = undefined; } preview(); controls.enabled = true; }
+  function cancel() { moving = undefined; if (activeCard) { cardScene.remove(activeCard); clear(activeCard); activeCard = undefined; } preview(); controls.enabled = true; }
   const ray = new THREE.Raycaster(), pointer = new THREE.Vector2(); let down = [0, 0];
   const pointerDown = (e: PointerEvent) => { down = [e.clientX, e.clientY]; };
   const pointerMove = (e: PointerEvent) => {
@@ -326,7 +333,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   };
   renderer.domElement.addEventListener('pointerdown', pointerDown); renderer.domElement.addEventListener('pointerup', pointerUp);
   renderer.domElement.addEventListener('pointermove', pointerMove); renderer.domElement.addEventListener('pointerleave', pointerLeave);
-  const observer = new ResizeObserver(() => { renderer.setSize(host.clientWidth, host.clientHeight); camera.aspect = host.clientWidth / host.clientHeight; camera.updateProjectionMatrix(); }); observer.observe(host);
+  const observer = new ResizeObserver(() => { renderer.setSize(host.clientWidth, host.clientHeight); cardRenderer.setSize(host.clientWidth, host.clientHeight); camera.aspect = host.clientWidth / host.clientHeight; camera.updateProjectionMatrix(); }); observer.observe(host);
   renderer.setAnimationLoop(() => {
     if (moving) { const current = moving; const t = Math.min(1, (performance.now() - current.start) / current.duration); current.update(t); if (t === 1) { moving = undefined; current.done(); } }
     if (diceGroup) {
@@ -334,7 +341,10 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
       diceGroup.children.forEach((die, i) => { if (die.userData.diceTotal) { die.visible = elapsed >= (reduced ? 80 : 1000 + (diceGroup!.children.length - 2) * 80); return; } const t = Math.min(1, elapsed / (reduced ? 80 : 1000 + i * 80)); die.rotation.set((1 - t) * (8 + i), (1 - t) * (10 + i), (1 - t) * 4); die.position.y = Math.sin(t * Math.PI) * .5; });
       if (elapsed > 3500) { scene.remove(diceGroup); clear(diceGroup); diceGroup = undefined; }
     }
-    controls.update(); renderer.render(scene, camera);
+    // OrbitControls damping keeps moving the camera even while input is disabled.
+    if (!activeCard) controls.update();
+    renderer.render(scene, camera);
+    cardRenderer.render(cardScene, camera);
   });
-  return { paint, preview, frame, moveCamera, moveExplorer, resetExplorer, rollDice, settle, deckStacks, draw, dismiss, cancel, dispose() { cancel(); observer.disconnect(); renderer.setAnimationLoop(null); controls.dispose(); clear(scene); renderer.dispose(); renderer.domElement.remove(); } };
+  return { paint, preview, frame, moveCamera, moveExplorer, resetExplorer, rollDice, settle, deckStacks, draw, dismiss, cancel, dispose() { cancel(); observer.disconnect(); renderer.setAnimationLoop(null); controls.dispose(); clear(scene); renderer.dispose(); cardRenderer.dispose(); renderer.domElement.remove(); cardRenderer.domElement.remove(); } };
 }
