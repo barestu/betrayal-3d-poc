@@ -37,6 +37,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   const board = new THREE.Group(), markers = new THREE.Group(), decks = new THREE.Group();
   scene.add(board, markers, decks);
   const explorer = new THREE.Group(); scene.add(explorer);
+  const trail = new THREE.Group(); scene.add(trail);
   let ghost: THREE.Group | undefined, activeCard: THREE.Group | undefined;
   let diceGroup: THREE.Group | undefined, diceStart = 0;
   let explorerFloor: Floor = 'ground';
@@ -57,6 +58,15 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   box(explorer, .2, .59, 0, .09, .38, .1, '#476f73');
   const head = new THREE.Mesh(new THREE.SphereGeometry(.14, 16, 12), material('#d1a77d'));
   head.position.y = 1.02; head.castShadow = true; explorer.add(head);
+  const markerCanvas = document.createElement('canvas'); markerCanvas.width = markerCanvas.height = 128;
+  const markerContext = markerCanvas.getContext('2d')!;
+  markerContext.fillStyle = '#c6ece9'; markerContext.strokeStyle = '#294b4e'; markerContext.lineWidth = 7;
+  markerContext.beginPath(); markerContext.arc(64, 64, 55, 0, Math.PI * 2); markerContext.fill(); markerContext.stroke();
+  markerContext.fillStyle = '#476f73'; markerContext.beginPath(); markerContext.arc(64, 47, 16, 0, Math.PI * 2); markerContext.fill();
+  markerContext.beginPath(); markerContext.arc(64, 100, 29, Math.PI, 0); markerContext.closePath(); markerContext.fill();
+  const markerTexture = new THREE.CanvasTexture(markerCanvas); markerTexture.colorSpace = THREE.SRGBColorSpace;
+  const playerMarker = new THREE.Sprite(new THREE.SpriteMaterial({ map: markerTexture, transparent: true, depthTest: false, depthWrite: false }));
+  playerMarker.position.set(0, 1.75, 0); playerMarker.scale.set(.7, .7, 1); playerMarker.renderOrder = 20; explorer.add(playerMarker);
   explorer.position.set(-.8, 0, .5);
   function label(parent: THREE.Object3D, text: string, color = '#e8dcc1', width = 2.5) {
     const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 96;
@@ -261,7 +271,29 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     }
     walkRing(room, entry, 6);
     if (points.length === 1) { done(); return; }
-    animate(explorer, 180 * (points.length - 1), t => { const progress = t * (points.length - 1), index = Math.min(Math.floor(progress), points.length - 2); explorer.position.lerpVectors(points[index], points[index + 1], progress - index); explorer.position.y = Math.abs(Math.sin(progress * Math.PI * 2)) * .04; }, () => { explorer.position.y = 0; explorerRoom = { x: room.x, z: room.z }; done(); });
+    clear(trail);
+    const trailDots: { mesh: THREE.Group; progress: number }[] = [];
+    for (let i = 0; i < points.length - 1; i++) {
+      const distance = points[i].distanceTo(points[i + 1]);
+      const count = Math.ceil(distance / .3);
+      for (let j = 0; j < count; j++) {
+        const fraction = j / count;
+        const position = points[i].clone().lerp(points[i + 1], fraction);
+        const dot = new THREE.Group();
+        const outline = new THREE.Mesh(new THREE.RingGeometry(.065, .095, 24), new THREE.MeshBasicMaterial({ color: '#79c5c8', depthTest: false, depthWrite: false, side: THREE.DoubleSide }));
+        const fill = new THREE.Mesh(new THREE.CircleGeometry(.095, 24), new THREE.MeshBasicMaterial({ color: '#476f73', depthTest: true, depthWrite: false, side: THREE.DoubleSide }));
+        outline.renderOrder = 10; fill.renderOrder = 11;
+        dot.add(outline, fill); dot.rotation.x = -Math.PI / 2; dot.position.set(position.x, .2, position.z);
+        dot.visible = false; trail.add(dot);
+        trailDots.push({ mesh: dot, progress: i + fraction });
+      }
+    }
+    animate(explorer, 180 * (points.length - 1), t => {
+      const progress = t * (points.length - 1), index = Math.min(Math.floor(progress), points.length - 2);
+      explorer.position.lerpVectors(points[index], points[index + 1], progress - index);
+      trailDots.forEach(dot => { dot.mesh.visible = dot.progress <= progress; });
+      explorer.position.y = Math.abs(Math.sin(progress * Math.PI * 2)) * .04;
+    }, () => { clear(trail); explorer.position.y = 0; explorerRoom = { x: room.x, z: room.z }; done(); });
   }
   function resetExplorer() { explorerFloor = 'ground'; explorerRoom = { x: 0, z: 0 }; explorer.position.set(-.8, 0, .5); explorer.visible = lastFloor === explorerFloor; }
   function rollDice(values: number[]) {
@@ -339,7 +371,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     const object = activeCard, start = object.position.clone();
     animate(object, 500, t => { object.position.lerpVectors(start, new THREE.Vector3(7, .2, 5.8 + decks.position.z), t * t); object.scale.setScalar(1 - t * .5); }, () => { cardScene.remove(object); clear(object); activeCard = undefined; controls.enabled = true; done(); });
   }
-  function cancel() { moving = undefined; if (activeCard) { cardScene.remove(activeCard); clear(activeCard); activeCard = undefined; } preview(); controls.enabled = true; }
+  function cancel() { moving = undefined; clear(trail); if (activeCard) { cardScene.remove(activeCard); clear(activeCard); activeCard = undefined; } preview(); controls.enabled = true; }
   const ray = new THREE.Raycaster(), pointer = new THREE.Vector2(); let down = [0, 0];
   const pointerDown = (e: PointerEvent) => { down = [e.clientX, e.clientY]; };
   const pointerMove = (e: PointerEvent) => {
