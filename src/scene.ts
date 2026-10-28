@@ -74,7 +74,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; return texture;
   }
   box(scene, 0, -.35, 0, 180, .3, 180, '#1e2929');
-  function makeRoom(room: Room) {
+  function makeRoom(room: Room, hideName = false) {
     const group = new THREE.Group(); group.position.set(room.x * 3.2, 0, room.z * 3.2);
     const inside = new THREE.Group(); inside.rotation.y = -room.rotation * Math.PI / 2; group.add(inside);
     const descending = room.tile.id === 'upper-landing';
@@ -124,7 +124,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
       for (const x of [-.5, .5]) for (const z of [-.4, .1]) box(inside, x, .32, z, .1, .5, .1, '#493d30');
       box(inside, 0, .68, -.15, .24, .14, .24, '#bfaa76');
     }
-    label(group, room.tile.name);
+    if (!hideName) label(group, room.tile.name);
     if (room.tile.cardIcon) {
       const icon = new THREE.Mesh(new THREE.PlaneGeometry(.35, .35), new THREE.MeshBasicMaterial({ map: iconTexture(room.tile.cardIcon), side: THREE.DoubleSide }));
       icon.rotation.x = -Math.PI / 2; icon.position.set(1.25, .18, 1.13); group.add(icon);
@@ -149,7 +149,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   function preview(room?: Room, valid = true) {
     if (ghost) { scene.remove(ghost); clear(ghost); ghost = undefined; }
     if (!room) return;
-    ghost = makeRoom(room); ghost.position.y = .7;
+    ghost = makeRoom(room, true); ghost.position.y = .7;
     ghost.traverse(obj => { const mesh = obj as THREE.Mesh; if (mesh.material) for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) { m.transparent = true; m.opacity = .48; if ('color' in m) (m as THREE.MeshStandardMaterial).color.set(valid ? '#94c8a2' : '#cf7064'); } });
     scene.add(ghost);
   }
