@@ -30,6 +30,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   const board = new THREE.Group(), markers = new THREE.Group(), decks = new THREE.Group();
   scene.add(board, markers, decks);
   let ghost: THREE.Group | undefined, activeCard: THREE.Group | undefined;
+  let diceGroup: THREE.Group | undefined, diceStart = 0;
   let moving: { object: THREE.Object3D; start: number; duration: number; update: (t: number) => void; done: () => void } | undefined;
   let lastRooms: Room[] = [], lastFloor: Floor = 'ground', blocked = false;
   const material = (color: string) => new THREE.MeshStandardMaterial({ color, roughness: .85 });
@@ -144,6 +145,30 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     const shift = direction.clone().multiplyScalar(forward).add(new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar(right));
     controls.target.add(shift); camera.position.copy(controls.target).add(offset); controls.update();
   }
+  function rollDice(values: number[]) {
+    if (diceGroup) { scene.remove(diceGroup); clear(diceGroup); }
+    diceGroup = new THREE.Group(); scene.add(diceGroup); diceStart = performance.now();
+    const forward = new THREE.Vector3(); camera.getWorldDirection(forward);
+    const center = camera.position.clone().addScaledVector(forward, 6);
+    diceGroup.position.copy(center); diceGroup.quaternion.copy(camera.quaternion);
+    values.forEach((value, i) => {
+      const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
+      const ctx = canvas.getContext('2d')!; ctx.fillStyle = '#e5dcc4'; ctx.fillRect(0, 0, 128, 128);
+      ctx.strokeStyle = '#9b8964'; ctx.lineWidth = 5; ctx.strokeRect(4, 4, 120, 120);
+      ctx.fillStyle = '#302f28'; ctx.font = 'bold 76px Georgia'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(value), 64, 68);
+      const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+      const die = new THREE.Mesh(new THREE.BoxGeometry(.48, .48, .48), new THREE.MeshBasicMaterial({ map: texture }));
+      die.position.set((i - (values.length - 1) / 2) * .62, 0, 0); diceGroup!.add(die);
+    });
+    const totalCanvas = document.createElement('canvas'); totalCanvas.width = 512; totalCanvas.height = 128;
+    const totalCtx = totalCanvas.getContext('2d')!;
+    totalCtx.fillStyle = '#172123'; totalCtx.fillRect(0, 0, 512, 128);
+    totalCtx.fillStyle = '#e5dcc4'; totalCtx.textAlign = 'center'; totalCtx.textBaseline = 'middle';
+    totalCtx.font = 'bold 64px sans-serif'; totalCtx.fillText(`TOTAL: ${values.reduce((sum, value) => sum + value, 0)}`, 256, 64);
+    const totalTexture = new THREE.CanvasTexture(totalCanvas); totalTexture.colorSpace = THREE.SRGBColorSpace;
+    const total = new THREE.Mesh(new THREE.PlaneGeometry(2, .5), new THREE.MeshBasicMaterial({ map: totalTexture }));
+    total.position.set(0, -.8, 0); total.userData.diceTotal = true; total.visible = false; diceGroup.add(total);
+  }
   function animate(object: THREE.Object3D, duration: number, update: (t: number) => void, done: () => void) {
     moving = { object, duration: reduced ? 80 : duration, start: performance.now(), update, done };
   }
@@ -220,7 +245,12 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   const observer = new ResizeObserver(() => { renderer.setSize(host.clientWidth, host.clientHeight); camera.aspect = host.clientWidth / host.clientHeight; camera.updateProjectionMatrix(); }); observer.observe(host);
   renderer.setAnimationLoop(() => {
     if (moving) { const current = moving; const t = Math.min(1, (performance.now() - current.start) / current.duration); current.update(t); if (t === 1) { moving = undefined; current.done(); } }
+    if (diceGroup) {
+      const elapsed = performance.now() - diceStart;
+      diceGroup.children.forEach((die, i) => { if (die.userData.diceTotal) { die.visible = elapsed >= (reduced ? 80 : 1000 + (diceGroup!.children.length - 2) * 80); return; } const t = Math.min(1, elapsed / (reduced ? 80 : 1000 + i * 80)); die.rotation.set((1 - t) * (8 + i), (1 - t) * (10 + i), (1 - t) * 4); die.position.y = Math.sin(t * Math.PI) * .5; });
+      if (elapsed > 3500) { scene.remove(diceGroup); clear(diceGroup); diceGroup = undefined; }
+    }
     controls.update(); renderer.render(scene, camera);
   });
-  return { paint, preview, frame, moveCamera, settle, deckStacks, draw, dismiss, cancel, dispose() { cancel(); observer.disconnect(); renderer.setAnimationLoop(null); controls.dispose(); clear(scene); renderer.dispose(); renderer.domElement.remove(); } };
+  return { paint, preview, frame, moveCamera, rollDice, settle, deckStacks, draw, dismiss, cancel, dispose() { cancel(); observer.disconnect(); renderer.setAnimationLoop(null); controls.dispose(); clear(scene); renderer.dispose(); renderer.domElement.remove(); } };
 }

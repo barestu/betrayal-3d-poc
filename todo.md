@@ -1,4 +1,3 @@
-- add dice roll simulation
 - click staircase move to upper ground
 - add popup explore when move into unexplored room
 - add char model & exploration animation
