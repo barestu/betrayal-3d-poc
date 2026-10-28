@@ -12,3 +12,5 @@
 @media(max-width:650px){.tools small{display:block;font-size:8px;line-height:1.5;letter-spacing:0}.tools{max-width:150px}}
 
 .tools small{font-size:11px;line-height:1.7;letter-spacing:.5px}@media(max-width:650px){.tools small{font-size:10px;line-height:1.5}.tools{max-width:190px}}
+
+.explore-hint{position:fixed;z-index:5;pointer-events:none;background:#d4ba78;color:#202a27;border-radius:5px;padding:8px 12px;font-size:12px;font-weight:700;box-shadow:0 4px 18px #0008}

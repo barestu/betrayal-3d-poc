@@ -5,7 +5,7 @@ import { Room, Door, Card, Deck, Floor, rotated, openings } from './model';
 const colors = { item: '#b89b60', event: '#7997a4', omen: '#a884b6' };
 const symbols = { item: '◇', event: '≋', omen: '☾' };
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onDeck: (deck: Deck) => void, onHover: (room: Room | null, x?: number, y?: number) => void, onRoom: (room: Room) => void) {
+export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onDeck: (deck: Deck) => void, onHover: (room: Room | null, x?: number, y?: number) => void, onRoom: (room: Room) => void, onExploreHover: (x?: number, y?: number) => void) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#111a1c');
   scene.fog = new THREE.Fog('#111a1c', 30, 70);
@@ -119,6 +119,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     explorer.visible = floor === explorerFloor;
     decks.position.z = Math.max(0, ...rooms.filter(r => r.floor === floor).map(r => r.z * 3.2)) + .8;
     clear(board); clear(markers);
+    if (locked) { renderer.domElement.style.cursor = ""; onExploreHover(); }
     rooms.filter(r => r.floor === floor).forEach(r => { const mesh = makeRoom(r); mesh.userData.key = `${r.x},${r.z}`; mesh.userData.room = r; board.add(mesh); });
     if (!locked) openings(rooms, floor).forEach(door => {
       const marker = new THREE.Mesh(new THREE.RingGeometry(.2, .33, 32), new THREE.MeshBasicMaterial({ color: '#d4ba78', side: THREE.DoubleSide }));
@@ -282,14 +283,21 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   const ray = new THREE.Raycaster(), pointer = new THREE.Vector2(); let down = [0, 0];
   const pointerDown = (e: PointerEvent) => { down = [e.clientX, e.clientY]; };
   const pointerMove = (e: PointerEvent) => {
-    if (blocked || e.buttons) { onHover(null); return; }
+    if (blocked || e.buttons) { onHover(null); onExploreHover(); renderer.domElement.style.cursor = ""; return; }
     const bounds = renderer.domElement.getBoundingClientRect(); pointer.set((e.clientX - bounds.left) / bounds.width * 2 - 1, -(e.clientY - bounds.top) / bounds.height * 2 + 1);
     ray.setFromCamera(pointer, camera);
-    let object: THREE.Object3D | null = ray.intersectObjects(board.children, true)[0]?.object ?? null;
+    const hit = ray.intersectObjects([...markers.children, ...decks.children, ...board.children], true)[0];
+    let target: THREE.Object3D | null = hit?.object ?? null;
+    while (target && !target.userData.door && !target.userData.room && !target.userData.deck) target = target.parent;
+    const door = !!target?.userData.door;
+    renderer.domElement.style.cursor = door ? "pointer" : "";
+    markers.children.forEach(marker => { if ((marker as THREE.Mesh).material instanceof THREE.MeshBasicMaterial && (marker as THREE.Mesh).material.visible) (marker as THREE.Mesh).scale.setScalar(door && marker.userData.door === target?.userData.door ? 1.35 : 1); });
+    onExploreHover(door ? e.clientX : undefined, door ? e.clientY : undefined);
+    let object: THREE.Object3D | null = door ? null : hit?.object ?? null;
     while (object && !object.userData.room) object = object.parent;
     onHover(object?.userData.room ?? null, e.clientX, e.clientY);
   };
-  const pointerLeave = () => onHover(null);
+  const pointerLeave = () => { onHover(null); onExploreHover(); renderer.domElement.style.cursor = ""; markers.children.forEach(marker => marker.scale.setScalar(1)); };
   const pointerUp = (e: PointerEvent) => {
     if (blocked || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;
     const bounds = renderer.domElement.getBoundingClientRect(); pointer.set((e.clientX - bounds.left) / bounds.width * 2 - 1, -(e.clientY - bounds.top) / bounds.height * 2 + 1);
