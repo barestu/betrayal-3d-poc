@@ -1,0 +1,9 @@
+- add camera template shortcut (isometric, topdown, recenter, etc)
+- add keyboard support (wasd=move camera, qe=rotate, 1234=camera template)
+- add popup display room info when hover into tile
+- add dice roll simulation
+- add minimap
+- click staircase move to upper ground
+- add popup explore when move into unexplored room
+- add char model & exploration animation
+- improve 3d model quality & make it more vary (e.g. entrance needs to look like entrance)

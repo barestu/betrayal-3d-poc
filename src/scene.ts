@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Room, Door, Card, Deck, Floor, rotated, openings } from './model';
 
 const colors = { item: '#b89b60', event: '#7997a4', omen: '#a884b6' };
+const symbols = { item: '◇', event: '≋', omen: '☾' };
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onDeck: (deck: Deck) => void) {
   const scene = new THREE.Scene();
@@ -51,6 +52,14 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
       group.remove(child);
     }
   }
+  function iconTexture(type: Deck) {
+    const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = colors[type]; ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = '#202725'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '180px sans-serif'; ctx.fillText(symbols[type], 128, 128);
+    const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; return texture;
+  }
   box(scene, 0, -.35, 0, 180, .3, 180, '#1e2929');
   function makeRoom(room: Room) {
     const group = new THREE.Group(); group.position.set(room.x * 3.2, 0, room.z * 3.2);
@@ -86,7 +95,10 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
       box(inside, 0, .68, -.15, .24, .14, .24, '#bfaa76');
     }
     label(group, room.tile.name);
-    if (room.tile.cardIcon) box(group, 1.26, .17, 1.15, .16, .05, .16, colors[room.tile.cardIcon]);
+    if (room.tile.cardIcon) {
+      const icon = new THREE.Mesh(new THREE.PlaneGeometry(.35, .35), new THREE.MeshBasicMaterial({ map: iconTexture(room.tile.cardIcon), side: THREE.DoubleSide }));
+      icon.rotation.x = -Math.PI / 2; icon.position.set(1.25, .18, 1.13); group.add(icon);
+    }
     return group;
   }
   function paint(rooms: Room[], floor: Floor, locked = false) {
@@ -126,6 +138,10 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     (['item', 'event', 'omen'] as Deck[]).forEach((type, i) => {
       const stack = new THREE.Group(); stack.position.set(i * 2.1, 0, 5.8); stack.userData.deck = type; decks.add(stack);
       for (let j = 0; j < Math.min(counts[type], 6); j++) box(stack, 0, j * .035, 0, 1.35, .035, 1.9, j % 2 ? '#c5bc9f' : colors[type]);
+      if (counts[type] > 0) {
+        const icon = new THREE.Mesh(new THREE.PlaneGeometry(.8, .8), new THREE.MeshBasicMaterial({ map: iconTexture(type), side: THREE.DoubleSide }));
+        icon.rotation.x = -Math.PI / 2; icon.position.set(0, (Math.min(counts[type], 6) - 1) * .035 + .019, 0); stack.add(icon);
+      }
       label(stack, type.toUpperCase(), colors[type], 1.7);
     });
   }
@@ -134,6 +150,8 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     const canvas = document.createElement('canvas'); canvas.width = 600; canvas.height = 840;
     const ctx = canvas.getContext('2d')!;
     ctx.fillStyle = '#e5dcc4'; ctx.fillRect(0, 0, 600, 840); ctx.strokeStyle = colors[card.type]; ctx.lineWidth = 12; ctx.strokeRect(22, 22, 556, 796);
+    ctx.fillStyle = colors[card.type]; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '100px sans-serif'; ctx.fillText(symbols[card.type], 500, 95);
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
     let y = 90;
     function write(text: string, font: string, line: number) {
       ctx.font = font; ctx.fillStyle = '#302f28'; let row = '';
@@ -143,7 +161,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     write(card.type.toUpperCase(), '20px sans-serif', 28); write(card.title, 'bold 38px Georgia', 45); write(card.text, 'italic 25px Georgia', 34);
     write((card.rules ?? '').slice(0, 220) + ((card.rules?.length ?? 0) > 220 ? '…' : ''), '24px Georgia', 32);
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(2, 2.8, .045), [material('#c6b58b'), material('#c6b58b'), material('#c6b58b'), material('#c6b58b'), new THREE.MeshBasicMaterial({ map: texture }), material(colors[card.type])]);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(2, 2.8, .045), [material('#c6b58b'), material('#c6b58b'), material('#c6b58b'), material('#c6b58b'), new THREE.MeshBasicMaterial({ map: texture }), new THREE.MeshBasicMaterial({ map: iconTexture(card.type) })]);
     group.add(mesh);
     const start = new THREE.Vector3((['item', 'event', 'omen'].indexOf(card.type)) * 2.1, .35, 5.8 + decks.position.z);
     const end = new THREE.Vector3(0, 0, -6).applyQuaternion(camera.quaternion).add(camera.position);
