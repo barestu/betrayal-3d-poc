@@ -5,7 +5,7 @@ import { Room, Door, Card, Deck, Floor, rotated, openings } from './model';
 const colors = { item: '#b89b60', event: '#7997a4', omen: '#a884b6' };
 const symbols = { item: '◇', event: '≋', omen: '☾' };
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onDeck: (deck: Deck) => void) {
+export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onDeck: (deck: Deck) => void, onHover: (room: Room | null, x?: number, y?: number) => void) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#111a1c');
   scene.fog = new THREE.Fog('#111a1c', 30, 70);
@@ -105,11 +105,13 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     lastRooms = rooms; lastFloor = floor; blocked = locked;
     decks.position.z = Math.max(0, ...rooms.filter(r => r.floor === floor).map(r => r.z * 3.2)) + .8;
     clear(board); clear(markers);
-    rooms.filter(r => r.floor === floor).forEach(r => { const mesh = makeRoom(r); mesh.userData.key = `${r.x},${r.z}`; board.add(mesh); });
+    rooms.filter(r => r.floor === floor).forEach(r => { const mesh = makeRoom(r); mesh.userData.key = `${r.x},${r.z}`; mesh.userData.room = r; board.add(mesh); });
     if (!locked) openings(rooms, floor).forEach(door => {
       const marker = new THREE.Mesh(new THREE.RingGeometry(.2, .33, 32), new THREE.MeshBasicMaterial({ color: '#d4ba78', side: THREE.DoubleSide }));
       marker.rotation.x = -Math.PI / 2; marker.position.set((door.room.x + (door.x - door.room.x) * .65) * 3.2, .18, (door.room.z + (door.z - door.room.z) * .65) * 3.2);
       marker.userData.door = door; markers.add(marker);
+      const hitArea = new THREE.Mesh(new THREE.PlaneGeometry(3.08, 3.08), new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }));
+      hitArea.rotation.x = -Math.PI / 2; hitArea.position.set(door.x * 3.2, .18, door.z * 3.2); hitArea.userData.door = door; markers.add(hitArea);
     });
   }
   function preview(room?: Room, valid = true) {
@@ -119,12 +121,28 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     ghost.traverse(obj => { const mesh = obj as THREE.Mesh; if (mesh.material) for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) { m.transparent = true; m.opacity = .48; if ('color' in m) (m as THREE.MeshStandardMaterial).color.set(valid ? '#94c8a2' : '#cf7064'); } });
     scene.add(ghost);
   }
-  function frame() {
+  function frame(view: 'isometric' | 'topdown' | 'front' | 'recenter' = 'isometric') {
     const visible = lastRooms.filter(r => r.floor === lastFloor);
     const x = visible.reduce((sum, r) => sum + r.x * 3.2, 0) / visible.length;
     const z = visible.reduce((sum, r) => sum + r.z * 3.2, 0) / visible.length;
-    const span = Math.max(9, ...visible.map(r => Math.max(Math.abs(r.x * 3.2 - x), Math.abs(r.z * 3.2 - z)) * 2 + 5));
-    controls.target.set(x, 0, z); camera.position.set(x + span, span * 1.4, z + span * 1.7); controls.update();
+    const span = Math.max(9, ...visible.map(r => Math.max(Math.abs(r.x * 3.2 - x), Math.abs(r.z * 3.2 - z)) * 2 + 5)) * .614125;
+    if (view === 'recenter') {
+      const direction = camera.position.clone().sub(controls.target).normalize();
+      camera.position.set(x, 0, z).addScaledVector(direction, Math.min(controls.maxDistance, span * 2.42));
+      controls.target.set(x, 0, z); controls.update(); return;
+    }
+    controls.target.set(x, 0, z);
+    if (view === 'topdown') camera.position.set(x, span * 2.4, z + .01);
+    else if (view === 'front') camera.position.set(x, span, z + span * 2);
+    else camera.position.set(x + span, span * 1.4, z + span * 1.7);
+    controls.update();
+  }
+  function moveCamera(forward: number, right: number, rotation: number) {
+    const offset = camera.position.clone().sub(controls.target);
+    if (rotation) offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotation);
+    const direction = new THREE.Vector3(-offset.x, 0, -offset.z).normalize();
+    const shift = direction.clone().multiplyScalar(forward).add(new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar(right));
+    controls.target.add(shift); camera.position.copy(controls.target).add(offset); controls.update();
   }
   function animate(object: THREE.Object3D, duration: number, update: (t: number) => void, done: () => void) {
     moving = { object, duration: reduced ? 80 : duration, start: performance.now(), update, done };
@@ -180,6 +198,15 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   function cancel() { moving = undefined; if (activeCard) { scene.remove(activeCard); clear(activeCard); activeCard = undefined; } preview(); controls.enabled = true; }
   const ray = new THREE.Raycaster(), pointer = new THREE.Vector2(); let down = [0, 0];
   const pointerDown = (e: PointerEvent) => { down = [e.clientX, e.clientY]; };
+  const pointerMove = (e: PointerEvent) => {
+    if (blocked || e.buttons) { onHover(null); return; }
+    const bounds = renderer.domElement.getBoundingClientRect(); pointer.set((e.clientX - bounds.left) / bounds.width * 2 - 1, -(e.clientY - bounds.top) / bounds.height * 2 + 1);
+    ray.setFromCamera(pointer, camera);
+    let object: THREE.Object3D | null = ray.intersectObjects(board.children, true)[0]?.object ?? null;
+    while (object && !object.userData.room) object = object.parent;
+    onHover(object?.userData.room ?? null, e.clientX, e.clientY);
+  };
+  const pointerLeave = () => onHover(null);
   const pointerUp = (e: PointerEvent) => {
     if (blocked || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;
     const bounds = renderer.domElement.getBoundingClientRect(); pointer.set((e.clientX - bounds.left) / bounds.width * 2 - 1, -(e.clientY - bounds.top) / bounds.height * 2 + 1);
@@ -189,10 +216,11 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     while (object) { if (object.userData.door) { onDoor(object.userData.door); break; } if (object.userData.deck) { onDeck(object.userData.deck); break; } object = object.parent; }
   };
   renderer.domElement.addEventListener('pointerdown', pointerDown); renderer.domElement.addEventListener('pointerup', pointerUp);
+  renderer.domElement.addEventListener('pointermove', pointerMove); renderer.domElement.addEventListener('pointerleave', pointerLeave);
   const observer = new ResizeObserver(() => { renderer.setSize(host.clientWidth, host.clientHeight); camera.aspect = host.clientWidth / host.clientHeight; camera.updateProjectionMatrix(); }); observer.observe(host);
   renderer.setAnimationLoop(() => {
     if (moving) { const current = moving; const t = Math.min(1, (performance.now() - current.start) / current.duration); current.update(t); if (t === 1) { moving = undefined; current.done(); } }
     controls.update(); renderer.render(scene, camera);
   });
-  return { paint, preview, frame, settle, deckStacks, draw, dismiss, cancel, dispose() { cancel(); observer.disconnect(); renderer.setAnimationLoop(null); controls.dispose(); clear(scene); renderer.dispose(); renderer.domElement.remove(); } };
+  return { paint, preview, frame, moveCamera, settle, deckStacks, draw, dismiss, cancel, dispose() { cancel(); observer.disconnect(); renderer.setAnimationLoop(null); controls.dispose(); clear(scene); renderer.dispose(); renderer.domElement.remove(); } };
 }

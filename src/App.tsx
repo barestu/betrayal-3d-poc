@@ -1,4 +1,4 @@
-import React, { useEffect, useReducer, useRef } from 'react';
+import React, { useEffect, useReducer, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createScene } from './scene';
 import { Card, Deck, Door, Floor, Room, content, rotated, shuffle, startingRooms } from './model';
@@ -11,10 +11,25 @@ function initial() {
     card: null as Card | null, last: null as Card | null, busy: false,
     message: 'Choose a glowing doorway to discover a room.', placed: 0 };
 }
+function Minimap({ rooms, floor }: { rooms: Room[]; floor: Floor }) {
+  const visible = rooms.filter(room => room.floor === floor);
+  if (!visible.length) return null;
+  const minX = Math.min(...visible.map(room => room.x)), maxX = Math.max(...visible.map(room => room.x));
+  const minZ = Math.min(...visible.map(room => room.z)), maxZ = Math.max(...visible.map(room => room.z));
+  return <aside className="minimap" aria-label={`Map of ${floor} floor`}><small>{floor.toUpperCase()} FLOOR MAP</small>
+    <svg viewBox={`${minX * 40 - 3} ${minZ * 40 - 3} ${(maxX - minX + 1) * 40 + 6} ${(maxZ - minZ + 1) * 40 + 6}`} role="img" aria-label={`${visible.length} rooms on the ${floor} floor`}>
+      {visible.map(room => <g key={`${room.x},${room.z}`} transform={`translate(${room.x * 40},${room.z * 40})`}>
+        <title>{room.tile.name}</title><rect x="1" y="1" width="38" height="38" rx="2" />
+        {rotated(room.tile.doors, room.rotation).map(d => <line key={d} x1={d === 1 ? 39 : d === 3 ? 1 : 15} y1={d === 0 ? 1 : d === 2 ? 39 : 15} x2={d === 1 ? 39 : d === 3 ? 1 : 25} y2={d === 0 ? 1 : d === 2 ? 39 : 25} />)}
+        {room.tile.cardIcon && <text x="20" y="24" className={room.tile.cardIcon}>{room.tile.cardIcon === 'item' ? '◇' : room.tile.cardIcon === 'event' ? '≋' : '☾'}</text>}
+      </g>)}
+    </svg></aside>;
+}
 function App() {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<ReturnType<typeof createScene>>();
   const state = useRef(initial());
+  const [hovered, setHovered] = useState<{ room: Room; x: number; y: number } | null>(null);
   const [, render] = useReducer(n => n + 1, 0);
   const s = state.current;
   const counts = () => Object.fromEntries(Object.entries(state.current.decks).map(([key, cards]) => [key, cards.length])) as Record<Deck, number>;
@@ -70,29 +85,56 @@ function App() {
   function floor(value: Floor) { const s = state.current; if (s.busy || s.card || s.preview) return; s.floor = value; refresh(); scene.current?.frame(); }
   const actions = useRef({ rotate, place, cancelPreview, dismiss }); actions.current = { rotate, place, cancelPreview, dismiss };
   useEffect(() => {
-    scene.current = createScene(host.current!, discover, draw); refresh(); scene.current.frame();
+    scene.current = createScene(host.current!, discover, draw, (room, x, y) => setHovered(room && x !== undefined && y !== undefined ? { room, x, y } : null)); refresh(); scene.current.frame();
+    const held = new Set<string>();
+    let previous = performance.now(), animation = 0;
+    const tick = (now: number) => {
+      const delta = Math.min((now - previous) / 1000, .05); previous = now;
+      if (!state.current.busy && !state.current.card) {
+        const axis = (positive: string, negative: string) => Number(held.has(positive)) - Number(held.has(negative));
+        const forward = axis('w', 's'), right = axis('d', 'a');
+        const rotation = state.current.preview ? 0 : axis('q', 'e');
+        if (forward || right || rotation) scene.current?.moveCamera(forward * delta * 8, right * delta * 8, rotation * delta * 1.3);
+      }
+      animation = requestAnimationFrame(tick);
+    };
+    animation = requestAnimationFrame(tick);
     const keyboard = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest('button, input, select, textarea') || e.repeat) return;
-      if (e.key.toLowerCase() === 'q') actions.current.rotate(-1);
-      if (e.key.toLowerCase() === 'e') actions.current.rotate(1);
+      if ((e.target as HTMLElement).closest('button, input, select, textarea, [contenteditable="true"]')) return;
+      const key = e.key.toLowerCase();
+      if (state.current.card || state.current.busy) { if (key === 'escape' && !e.repeat) actions.current.dismiss(); return; }
+      if (state.current.preview && (key === 'q' || key === 'e')) { if (!e.repeat) actions.current.rotate(key === 'q' ? -1 : 1); return; }
+      if (key === 'w' || key === 's' || key === 'a' || key === 'd' || key === 'q' || key === 'e') {
+        e.preventDefault(); held.add(key);
+      }
+      if (!e.repeat && key === '1') scene.current?.frame('isometric');
+      if (!e.repeat && key === '2') scene.current?.frame('topdown');
+      if (!e.repeat && key === '3') scene.current?.frame('front');
+      if (!e.repeat && key === '4') scene.current?.frame('recenter');
+      if (e.repeat) return;
       if (e.key === 'Enter') actions.current.place();
       if (e.key === 'Escape') { actions.current.cancelPreview(); actions.current.dismiss(); }
     };
+    const keyup = (e: KeyboardEvent) => held.delete(e.key.toLowerCase());
+    const clearHeld = () => held.clear();
     window.addEventListener('keydown', keyboard);
-    return () => { window.removeEventListener('keydown', keyboard); scene.current?.dispose(); };
+    window.addEventListener('keyup', keyup); window.addEventListener('blur', clearHeld);
+    return () => { cancelAnimationFrame(animation); window.removeEventListener('keydown', keyboard); window.removeEventListener('keyup', keyup); window.removeEventListener('blur', clearHeld); scene.current?.dispose(); };
   }, []);
   const locked = s.busy || !!s.card || !!s.preview;
   return <main>
     <div ref={host} className="scene" />
+    {hovered && !s.preview && !s.card && !s.busy && hovered.room.floor === s.floor && <section className="room-hover panel" style={{ left: Math.min(hovered.x + 16, window.innerWidth - 300), top: Math.max(8, Math.min(hovered.y + 16, window.innerHeight - 220)) }}><small>ROOM INFORMATION</small><h2>{hovered.room.tile.name}</h2>{hovered.room.tile.blurb && <p>{hovered.room.tile.blurb}</p>}{hovered.room.tile.rules && <p>{hovered.room.tile.rules}</p>}{hovered.room.tile.cardIcon && <small><span className={`room-card-icon ${hovered.room.tile.cardIcon}`}>{hovered.room.tile.cardIcon === 'item' ? '◇' : hovered.room.tile.cardIcon === 'event' ? '≋' : '☾'}</span> DRAW {hovered.room.tile.cardIcon.toUpperCase()}</small>}</section>}
     <header>
       <div className="brand"><span className="sigil">⌘</span><div><small>BETRAYAL / SPATIAL STUDY</small><h1>The house unfolds<span>.</span></h1></div></div>
       <div className="header-actions"><span className="badge">3D SANDBOX</span><button onClick={reset}>Reset ↺</button></div>
     </header>
     <nav className="floors" aria-label="Floor">{(['upper', 'ground', 'basement'] as Floor[]).map((f, i) => <button key={f} className={s.floor === f ? 'selected' : ''} disabled={locked} onClick={() => floor(f)}><small>0{3 - i}</small>{f === 'upper' ? 'Upper floor' : f === 'ground' ? 'Ground floor' : 'Basement'}</button>)}</nav>
-    <aside className="info"><small>AN UNFINISHED HOUSE</small><h2>Open a door.<br />Let the dark in.</h2><p>Explore the house one room at a time. Follow the gold rings to discover what lies beyond.</p><div className="stats"><div><strong>{s.rooms.filter(r => r.floor === s.floor).length.toString().padStart(2, '0')}</strong><span>rooms on floor</span></div><div><strong>{s.stack.length.toString().padStart(2, '0')}</strong><span>undiscovered</span></div></div><button className="quiet" disabled={s.busy || !!s.card} onClick={() => scene.current?.frame()}>↗ Recenter view</button></aside>
-    {s.preview && <section className="placement panel"><small>ROOM DISCOVERED</small><h2>{s.preview.room.tile.name}</h2><p>{s.preview.room.tile.blurb}</p>{s.preview.room.tile.rules && <p className="room-rules">{s.preview.room.tile.rules}</p>}<p className={valid() ? 'valid' : 'invalid'}>{valid() ? '✓ Doorways connect' : '↻ Rotate to connect the doorway'}</p><div className="row"><button onClick={() => rotate(-1)}>↶ Q</button><button onClick={() => rotate(1)}>E ↷</button><button className="primary" disabled={!valid()} onClick={place}>Place room ↵</button><button onClick={cancelPreview}>Cancel</button></div></section>}
+    <Minimap rooms={s.rooms} floor={s.floor} />
+    <aside className="info"><small>AN UNFINISHED HOUSE</small><h2>Open a door.<br />Let the dark in.</h2><p>Explore the house one room at a time. Follow the gold rings to discover what lies beyond.</p><div className="stats"><div><strong>{s.rooms.filter(r => r.floor === s.floor).length.toString().padStart(2, '0')}</strong><span>rooms on floor</span></div><div><strong>{s.stack.length.toString().padStart(2, '0')}</strong><span>undiscovered</span></div></div><div className="row"><button className="quiet" disabled={s.busy || !!s.card} onClick={e => { scene.current?.frame('isometric'); e.currentTarget.blur(); }}>Isometric</button><button className="quiet" disabled={s.busy || !!s.card} onClick={e => { scene.current?.frame('topdown'); e.currentTarget.blur(); }}>Top-down</button><button className="quiet" disabled={s.busy || !!s.card} onClick={e => { scene.current?.frame('recenter'); e.currentTarget.blur(); }}>Recenter</button></div></aside>
+    {s.preview && <section className="placement panel"><small>EXPLORING AN UNEXPLORED ROOM</small><h2>{s.preview.room.tile.name}</h2><p>{s.preview.room.tile.blurb}</p>{s.preview.room.tile.rules && <p className="room-rules">{s.preview.room.tile.rules}</p>}<p className={valid() ? 'valid' : 'invalid'}>{valid() ? '✓ Doorways connect' : '↻ Rotate to connect the doorway'}</p><div className="row"><button onClick={() => rotate(-1)}>↶ Q</button><button onClick={() => rotate(1)}>E ↷</button><button className="primary" disabled={!valid()} onClick={place}>Place room ↵</button><button onClick={cancelPreview}>Cancel</button></div></section>}
     {s.card && !s.busy && <section className="card-info panel"><small>{s.card.type.toUpperCase()} / REVEALED</small><h2>{s.card.title}</h2><p className="flavor">{s.card.text}</p>{s.card.rules && <p>{s.card.rules}</p>}{s.card.roll && <><small>ROLL · {s.card.roll.stat}</small><div className="roll-table">{s.card.roll.bands.map(b => <div key={b.range}><strong>{b.range}</strong><span>{b.text}</span></div>)}</div></>}<button className="primary" onClick={dismiss}>Dismiss card →</button><small className="note">Visual study · effects are not resolved</small></section>}
-    <footer><div className="status"><span className={s.busy ? 'dot pulse' : 'dot'} /><span>{s.message}</span></div><div className="bottom"><div className="deck-buttons">{(['item', 'event', 'omen'] as Deck[]).map(d => <button className={`deck ${d}`} key={d} disabled={locked || !s.decks[d].length} onClick={() => draw(d)}><span className="deck-icon">{d === 'item' ? '◇' : d === 'event' ? '≋' : '☾'}</span><span><small>DRAW {d.toUpperCase()}</small><b>{s.decks[d].length} cards</b></span><span>↗</span></button>)}</div><div className="tools"><button disabled={locked || !s.last} onClick={() => draw(s.last!.type, true)}>Replay last draw</button><small>DRAG TO ORBIT · SCROLL TO ZOOM<br />RIGHT-DRAG TO PAN</small></div></div></footer>
+    <footer><div className="status"><span className={s.busy ? 'dot pulse' : 'dot'} /><span>{s.message}</span></div><div className="bottom"><div className="deck-buttons">{(['item', 'event', 'omen'] as Deck[]).map(d => <button className={`deck ${d}`} key={d} disabled={locked || !s.decks[d].length} onClick={() => draw(d)}><span className="deck-icon">{d === 'item' ? '◇' : d === 'event' ? '≋' : '☾'}</span><span><small>DRAW {d.toUpperCase()}</small><b>{s.decks[d].length} cards</b></span><span>↗</span></button>)}</div><div className="tools"><button disabled={locked || !s.last} onClick={() => draw(s.last!.type, true)}>Replay last draw</button><small>WASD PAN · Q/E ROTATE · 1–4 VIEWS<br />DRAG TO ORBIT · SCROLL TO ZOOM</small></div></div></footer>
   </main>;
 }
 createRoot(document.getElementById('root')!).render(<App />);
