@@ -77,9 +77,23 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   function makeRoom(room: Room) {
     const group = new THREE.Group(); group.position.set(room.x * 3.2, 0, room.z * 3.2);
     const inside = new THREE.Group(); inside.rotation.y = -room.rotation * Math.PI / 2; group.add(inside);
-    box(inside, 0, -.02, 0, 3.08, .22, 3.08, '#333a34');
-    box(inside, 0, .1, 0, 2.94, .05, 2.94, room.floor === 'basement' ? '#696b60' : '#827158');
-    for (let i = -3; i <= 3; i++) box(inside, i * .4, .13, 0, .015, .008, 2.9, '#514d40');
+    const descending = room.tile.id === 'upper-landing';
+    if (descending) {
+      // Leave an opening in the landing so the steps visibly descend below it.
+      for (const x of [-1.02, 1.02]) {
+        box(inside, x, -.02, 0, 1.04, .22, 3.08, '#333a34');
+        box(inside, x, .1, 0, .97, .05, 2.94, '#827158');
+      }
+      for (const z of [-1.15, 1.15]) {
+        box(inside, 0, -.02, z, 1, .22, .78, '#333a34');
+        box(inside, 0, .1, z, 1, .05, .64, '#827158');
+      }
+      box(inside, 0, -.65, 0, 1, .05, 1.7, '#292f2b');
+    } else {
+      box(inside, 0, -.02, 0, 3.08, .22, 3.08, '#333a34');
+      box(inside, 0, .1, 0, 2.94, .05, 2.94, room.floor === 'basement' ? '#696b60' : '#827158');
+      for (let i = -3; i <= 3; i++) box(inside, i * .4, .13, 0, .015, .008, 2.9, '#514d40');
+    }
     for (let i = 0; i < 4; i++) {
       const wall = new THREE.Group(); wall.rotation.y = -i * Math.PI / 2; inside.add(wall);
       if (rotated(room.tile.doors, 0).includes(i)) {
@@ -92,7 +106,10 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     }
     const id = room.tile.id;
     if (/stairs|staircase|landing/.test(id)) {
-      for (let i = 0; i < 6; i++) box(inside, 0, .2 + i * .07, .6 - i * .23, .95, .14 + i * .14, .24, '#b7aa8a');
+      for (let i = 0; i < 6; i++) {
+        if (descending) box(inside, 0, .04 - i * .11, .6 - i * .23, .95, .08, .24, '#b7aa8a');
+        else box(inside, 0, .2 + i * .07, .6 - i * .23, .95, .14 + i * .14, .24, '#b7aa8a');
+      }
     } else if (/bed|nursery|quarters/.test(id)) {
       box(inside, -.35, .3, -.15, 1.1, .35, 1.65, '#51473c'); box(inside, -.35, .52, -.15, 1.05, .15, 1.55, '#647b78'); box(inside, -.35, .63, -.68, .8, .12, .35, '#d3c9aa');
     } else if (/library|laboratory|storeroom|larder|wine|kitchen/.test(id)) {
@@ -162,7 +179,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   function moveExplorer(room: Room, done: () => void, failed: () => void = () => {}, transfer = false) {
     if (room.floor !== explorerFloor) {
       if (!transfer) { failed(); return; }
-      explorerFloor = room.floor; explorerRoom = { x: room.x, z: room.z }; explorer.position.set(room.x * 3.2, 0, room.z * 3.2); explorer.visible = lastFloor === explorerFloor; done(); return;
+      explorerFloor = room.floor; explorerRoom = { x: room.x, z: room.z }; explorer.position.set(room.x * 3.2 - 1.12, 0, room.z * 3.2); explorer.visible = lastFloor === explorerFloor; done(); return;
     }
     const rooms = lastRooms.filter(r => r.floor === explorerFloor), startRoom = rooms.find(r => r.x === explorerRoom.x && r.z === explorerRoom.z);
     if (!startRoom) { failed(); return; }
