@@ -55,6 +55,10 @@ function App() {
     s.preview = { room: { tile, floor: s.floor, x: door.x, z: door.z, rotation }, door, stack: before };
     s.message = 'Rotate the room, then place it when its doorway connects.'; refresh();
   }
+  function exploreDoor(door: Door) {
+    const s = state.current; if (s.busy || s.card || s.preview) return;
+    discover(door);
+  }
   function draw(deck: Deck, replay = false) {
     const s = state.current;
     if (s.busy || s.card || s.preview) return;
@@ -76,20 +80,29 @@ function App() {
     if (!s.preview || !valid() || s.busy) return;
     const room = s.preview.room;
     s.rooms.push(room); s.preview = null; s.busy = true; s.placed++; s.message = 'The house takes shape.'; refresh();
-    scene.current?.settle(room, () => { s.busy = false; refresh(); if (room.tile.cardIcon) draw(room.tile.cardIcon); });
+    scene.current?.settle(room, () => { scene.current?.moveExplorer(room, () => { s.busy = false; refresh(); if (room.tile.cardIcon) draw(room.tile.cardIcon); }, () => { s.busy = false; s.message = 'No connected path to the revealed room.'; refresh(); }); });
   }
   function dismiss() {
     const s = state.current; if (!s.card || s.busy) return;
     s.busy = true; render();
     scene.current?.dismiss(() => { s.card = null; s.busy = false; s.message = 'Choose a doorway, or draw another card.'; refresh(); });
   }
-  function reset() { scene.current?.cancel(); state.current = initial(); refresh(); scene.current?.frame(); }
+  function reset() { scene.current?.cancel(); state.current = initial(); scene.current?.resetExplorer(); refresh(); scene.current?.frame(); }
   function floor(value: Floor) { const s = state.current; if (s.busy || s.card || s.preview) return; s.floor = value; refresh(); scene.current?.frame(); }
   const actions = useRef({ rotate, place, cancelPreview, dismiss }); actions.current = { rotate, place, cancelPreview, dismiss };
   useEffect(() => {
-    scene.current = createScene(host.current!, discover, draw, (room, x, y) => setHovered(room && x !== undefined && y !== undefined ? { room, x, y } : null), room => {
-      if (room.tile.id === 'grand-staircase') floor('upper');
-      else if (room.tile.id === 'upper-landing') floor('ground');
+    scene.current = createScene(host.current!, exploreDoor, draw, (room, x, y) => setHovered(room && x !== undefined && y !== undefined ? { room, x, y } : null), room => {
+      const s = state.current;
+      s.busy = true; refresh();
+      scene.current?.moveExplorer(room, () => {
+        s.busy = false;
+        const destination = room.tile.id === 'grand-staircase' ? 'upper' : room.tile.id === 'upper-landing' ? 'ground' : null;
+        if (destination) {
+          const landing = s.rooms.find(r => r.tile.id === (destination === 'upper' ? 'upper-landing' : 'grand-staircase'));
+          if (landing) scene.current?.moveExplorer(landing, () => {}, () => {}, true);
+          floor(destination);
+        } else { s.message = `Explorer moved to ${room.tile.name}.`; refresh(); }
+      }, () => { s.busy = false; s.message = 'No connected path to that room.'; refresh(); });
     }); refresh(); scene.current.frame();
     const held = new Set<string>();
     let previous = performance.now(), animation = 0;

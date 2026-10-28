@@ -29,8 +29,11 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   scene.add(light);
   const board = new THREE.Group(), markers = new THREE.Group(), decks = new THREE.Group();
   scene.add(board, markers, decks);
+  const explorer = new THREE.Group(); scene.add(explorer);
   let ghost: THREE.Group | undefined, activeCard: THREE.Group | undefined;
   let diceGroup: THREE.Group | undefined, diceStart = 0;
+  let explorerFloor: Floor = 'ground';
+  let explorerRoom = { x: 0, z: 0 };
   let moving: { object: THREE.Object3D; start: number; duration: number; update: (t: number) => void; done: () => void } | undefined;
   let lastRooms: Room[] = [], lastFloor: Floor = 'ground', blocked = false;
   const material = (color: string) => new THREE.MeshStandardMaterial({ color, roughness: .85 });
@@ -38,6 +41,15 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material(color));
     mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; parent.add(mesh); return mesh;
   }
+  box(explorer, 0, .2, 0, .56, .08, .56, '#b49b68');
+  box(explorer, 0, .58, 0, .3, .55, .22, '#476f73');
+  box(explorer, -.1, .3, 0, .11, .22, .13, '#303e40');
+  box(explorer, .1, .3, 0, .11, .22, .13, '#303e40');
+  box(explorer, -.2, .59, 0, .09, .38, .1, '#476f73');
+  box(explorer, .2, .59, 0, .09, .38, .1, '#476f73');
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.14, 16, 12), material('#d1a77d'));
+  head.position.y = 1.02; head.castShadow = true; explorer.add(head);
+  explorer.position.set(-.8, 0, .5);
   function label(parent: THREE.Object3D, text: string, color = '#e8dcc1', width = 2.5) {
     const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 96;
     const ctx = canvas.getContext('2d')!;
@@ -104,6 +116,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   }
   function paint(rooms: Room[], floor: Floor, locked = false) {
     lastRooms = rooms; lastFloor = floor; blocked = locked;
+    explorer.visible = floor === explorerFloor;
     decks.position.z = Math.max(0, ...rooms.filter(r => r.floor === floor).map(r => r.z * 3.2)) + .8;
     clear(board); clear(markers);
     rooms.filter(r => r.floor === floor).forEach(r => { const mesh = makeRoom(r); mesh.userData.key = `${r.x},${r.z}`; mesh.userData.room = r; board.add(mesh); });
@@ -145,6 +158,51 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     const shift = direction.clone().multiplyScalar(forward).add(new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar(right));
     controls.target.add(shift); camera.position.copy(controls.target).add(offset); controls.update();
   }
+  function moveExplorer(room: Room, done: () => void, failed: () => void = () => {}, transfer = false) {
+    if (room.floor !== explorerFloor) {
+      if (!transfer) { failed(); return; }
+      explorerFloor = room.floor; explorerRoom = { x: room.x, z: room.z }; explorer.position.set(room.x * 3.2, 0, room.z * 3.2); explorer.visible = lastFloor === explorerFloor; done(); return;
+    }
+    const rooms = lastRooms.filter(r => r.floor === explorerFloor), startRoom = rooms.find(r => r.x === explorerRoom.x && r.z === explorerRoom.z);
+    if (!startRoom) { failed(); return; }
+    const queue: Room[][] = [[startRoom]], visited = new Set([`${startRoom.x},${startRoom.z}`]);
+    let path: Room[] | undefined;
+    while (queue.length) {
+      const current = queue.shift()!, last = current[current.length - 1];
+      if (last.x === room.x && last.z === room.z) { path = current; break; }
+      for (const direction of rotated(last.tile.doors, last.rotation)) {
+        const [dx, dz] = [[0, -1], [1, 0], [0, 1], [-1, 0]][direction];
+        const next = rooms.find(r => r.x === last.x + dx && r.z === last.z + dz);
+        if (!next || visited.has(`${next.x},${next.z}`) || !rotated(next.tile.doors, next.rotation).includes((direction + 2) % 4)) continue;
+        visited.add(`${next.x},${next.z}`); queue.push([...current, next]);
+      }
+    }
+    if (!path) { failed(); return; }
+    const points = [explorer.position.clone()];
+    // Keep the explorer near the room perimeter, clear of central furniture.
+    const ring = [[0, -1.12], [1.12, -1.12], [1.12, 0], [1.12, 1.12], [0, 1.12], [-1.12, 1.12], [-1.12, 0], [-1.12, -1.12]];
+    const pointOnRing = (r: Room, index: number) => new THREE.Vector3(r.x * 3.2 + ring[index][0], 0, r.z * 3.2 + ring[index][1]);
+    const walkRing = (r: Room, from: number, to: number) => {
+      const clockwise = (to - from + 8) % 8, step = clockwise <= 4 ? 1 : -1;
+      let index = from;
+      while (index !== to) { index = (index + step + 8) % 8; points.push(pointOnRing(r, index)); }
+    };
+    let entry = 6;
+    points.push(pointOnRing(path[0], entry));
+    for (let i = 1; i < path.length; i++) {
+      const a = path[i - 1], b = path[i];
+      const direction = b.z < a.z ? 0 : b.x > a.x ? 1 : b.z > a.z ? 2 : 3;
+      const exit = direction * 2;
+      walkRing(a, entry, exit);
+      points.push(new THREE.Vector3((a.x + b.x) * 1.6, 0, (a.z + b.z) * 1.6));
+      entry = (exit + 4) % 8;
+      points.push(pointOnRing(b, entry));
+    }
+    walkRing(room, entry, 6);
+    if (points.length === 1) { done(); return; }
+    animate(explorer, 180 * (points.length - 1), t => { const progress = t * (points.length - 1), index = Math.min(Math.floor(progress), points.length - 2); explorer.position.lerpVectors(points[index], points[index + 1], progress - index); explorer.position.y = Math.abs(Math.sin(progress * Math.PI * 2)) * .12; }, () => { explorer.position.y = 0; explorerRoom = { x: room.x, z: room.z }; done(); });
+  }
+  function resetExplorer() { explorerFloor = 'ground'; explorerRoom = { x: 0, z: 0 }; explorer.position.set(-.8, 0, .5); explorer.visible = lastFloor === explorerFloor; }
   function rollDice(values: number[]) {
     if (diceGroup) { scene.remove(diceGroup); clear(diceGroup); }
     diceGroup = new THREE.Group(); scene.add(diceGroup); diceStart = performance.now();
@@ -253,5 +311,5 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     }
     controls.update(); renderer.render(scene, camera);
   });
-  return { paint, preview, frame, moveCamera, rollDice, settle, deckStacks, draw, dismiss, cancel, dispose() { cancel(); observer.disconnect(); renderer.setAnimationLoop(null); controls.dispose(); clear(scene); renderer.dispose(); renderer.domElement.remove(); } };
+  return { paint, preview, frame, moveCamera, moveExplorer, resetExplorer, rollDice, settle, deckStacks, draw, dismiss, cancel, dispose() { cancel(); observer.disconnect(); renderer.setAnimationLoop(null); controls.dispose(); clear(scene); renderer.dispose(); renderer.domElement.remove(); } };
 }
