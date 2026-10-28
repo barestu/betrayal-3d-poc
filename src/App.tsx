@@ -32,6 +32,7 @@ function App() {
   const state = useRef(initial());
   const [hovered, setHovered] = useState<{ room: Room; x: number; y: number } | null>(null);
   const [exploreHint, setExploreHint] = useState<{ x: number; y: number } | null>(null);
+  const [wallHeight, setWallHeight] = useState(.68);
   const [devOpen, setDevOpen] = useState(false);
   const [showPerformance, setShowPerformance] = useState(true);
   const [diceCount, setDiceCount] = useState(2);
@@ -186,7 +187,7 @@ function App() {
       <div className="brand"><span className="sigil">⌘</span><div><small>BETRAYAL / SPATIAL STUDY</small><h1>The house unfolds<span>.</span></h1></div></div>
       <div className="header-actions"><span className="badge">3D SANDBOX</span><button onClick={() => setDevOpen(!devOpen)} aria-expanded={devOpen}><span aria-hidden="true">⚙</span> Dev Tools</button><button onClick={reset}>Reset ↺</button></div>
     </header>
-    {devOpen && <section className="dev-panel" aria-label="Developer tools"><strong>Developer tools</strong><button disabled={locked} onClick={loadAllTiles}>Load all room tiles</button><button onClick={() => setShowPerformance(!showPerformance)}>{showPerformance ? "Hide" : "Show"} performance</button><button onClick={reset}>Reset scene</button><small>Adds remaining tiles to available doorways.</small></section>}
+    {devOpen && <section className="dev-panel" aria-label="Developer tools"><strong>Developer tools</strong><div className="wall-height"><span>Wall height</span><div className="wall-options" role="group" aria-label="Wall height">{([["Off", .08], ["Low", .34], ["Default", .68], ["High", 1.2], ["Very high", 1.7]] as const).map(([label, value]) => <button key={label} type="button" disabled={s.busy || !!s.card} aria-pressed={wallHeight === value} onClick={() => { setWallHeight(value); scene.current?.setWallHeight(value); refresh(); }}>{label}</button>)}</div></div><button disabled={locked} onClick={loadAllTiles}>Load all room tiles</button><button onClick={() => setShowPerformance(!showPerformance)}>{showPerformance ? "Hide" : "Show"} performance</button><button onClick={reset}>Reset scene</button><small>Adds remaining tiles to available doorways.</small></section>}
     <nav className="floors" aria-label="Floor">{(['upper', 'ground', 'basement'] as Floor[]).map((f, i) => <button key={f} className={s.floor === f ? 'selected' : ''} disabled={locked} onClick={() => floor(f)}><small>0{3 - i}</small>{f === 'upper' ? 'Upper floor' : f === 'ground' ? 'Ground floor' : 'Basement'}</button>)}</nav>
     <div className="camera-bar"><div className="camera-controls" aria-label="Camera views"><span className="camera-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="4"/></svg></span><button className="quiet" disabled={s.busy || !!s.card} onClick={e => { scene.current?.frame('isometric'); e.currentTarget.blur(); }}>Isometric</button><button className="quiet" disabled={s.busy || !!s.card} onClick={e => { scene.current?.frame('topdown'); e.currentTarget.blur(); }}>Top-down</button><button className="quiet" disabled={s.busy || !!s.card} onClick={e => { scene.current?.frame('recenter'); e.currentTarget.blur(); }}>Recenter</button></div></div>
     <Minimap rooms={s.rooms} floor={s.floor} />

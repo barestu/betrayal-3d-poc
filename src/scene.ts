@@ -42,6 +42,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   let explorerFloor: Floor = 'ground';
   let explorerRoom = { x: 0, z: 0 };
   let moving: { object: THREE.Object3D; start: number; duration: number; update: (t: number) => void; done: () => void } | undefined;
+  let wallHeight = .68;
   let lastRooms: Room[] = [], lastFloor: Floor = 'ground', blocked = false;
   const material = (color: string) => new THREE.MeshStandardMaterial({ color, roughness: .85 });
   function box(parent: THREE.Object3D, x: number, y: number, z: number, w: number, h: number, d: number, color: string) {
@@ -102,7 +103,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
       for (let i = -3; i <= 3; i++) box(inside, i * .4, .13, 0, .015, .008, 2.9, '#514d40');
     }
     for (let i = 0; i < 4; i++) {
-      const wall = new THREE.Group(); wall.rotation.y = -i * Math.PI / 2; inside.add(wall);
+      const wall = new THREE.Group(); wall.rotation.y = -i * Math.PI / 2; wall.scale.y = wallHeight / .68; wall.position.y = .12 * (1 - wall.scale.y); inside.add(wall);
       if (rotated(room.tile.doors, 0).includes(i)) {
         box(wall, -.99, .46, -1.46, .94, .68, .13, '#b0a389'); box(wall, .99, .46, -1.46, .94, .68, .13, '#b0a389');
         box(wall, 0, .15, -1.46, 1, .04, .19, '#c1a875');
@@ -381,5 +382,5 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     renderer.render(scene, camera);
     cardRenderer.render(cardScene, camera);
   });
-  return { paint, preview, frame, moveCamera, moveExplorer, resetExplorer, rollDice, settle, deckStacks, draw, dismiss, cancel, dispose() { cancel(); observer.disconnect(); renderer.setAnimationLoop(null); controls.dispose(); clear(scene); renderer.dispose(); cardRenderer.dispose(); renderer.domElement.remove(); cardRenderer.domElement.remove(); } };
+  return { paint, preview, setWallHeight(value: number) { wallHeight = value; }, frame, moveCamera, moveExplorer, resetExplorer, rollDice, settle, deckStacks, draw, dismiss, cancel, dispose() { cancel(); observer.disconnect(); renderer.setAnimationLoop(null); controls.dispose(); clear(scene); renderer.dispose(); cardRenderer.dispose(); renderer.domElement.remove(); cardRenderer.domElement.remove(); } };
 }

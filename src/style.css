@@ -20,3 +20,9 @@
 .performance-display{position:absolute;right:12px;bottom:8px;z-index:5;pointer-events:none;color:#c5d2c6;background:#111a1cbb;border-radius:4px;padding:5px 8px;font:11px monospace}
 
 .dev-panel{position:absolute;z-index:6;right:24px;top:90px;display:flex;flex-direction:column;gap:8px;width:220px;padding:16px;background:#172123f5;border:1px solid #536056;border-radius:8px}.dev-panel strong{font-size:13px}.dev-panel button{text-align:left;font-size:12px}.dev-panel small{line-height:1.5;letter-spacing:0}
+
+.dev-panel label{font-size:12px;display:flex;flex-direction:column;gap:6px}.dev-panel select{width:100%;padding:8px;color:inherit;background:#1b2728;border:1px solid #46504d;border-radius:5px}
+
+.wall-height{font-size:12px}.wall-options{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.dev-panel .wall-options button{padding:5px 8px;border-radius:14px;font-size:11px}.dev-panel .wall-options button[aria-pressed=true]{background:#c4b484;color:#202a27;border-color:#c4b484}
+
+.wall-options{align-items:center}.wall-options output{min-width:3em;text-align:center;font-variant-numeric:tabular-nums}
