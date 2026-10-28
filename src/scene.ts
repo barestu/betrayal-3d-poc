@@ -234,10 +234,15 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     }
     if (!path) { failed(); return; }
     const points = [explorer.position.clone()];
-    // Keep the explorer near the room perimeter, clear of central furniture.
+    // Walk directly across open floor; route around central furniture elsewhere.
     const ring = [[0, -1.12], [1.12, -1.12], [1.12, 0], [1.12, 1.12], [0, 1.12], [-1.12, 1.12], [-1.12, 0], [-1.12, -1.12]];
     const pointOnRing = (r: Room, index: number) => new THREE.Vector3(r.x * 3.2 + ring[index][0], 0, r.z * 3.2 + ring[index][1]);
     const walkRing = (r: Room, from: number, to: number) => {
+      if (from === to) return;
+      if (/^(entrance-hall|foyer|gardens|conservatory|patio)$/.test(r.tile.id)) {
+        points.push(pointOnRing(r, to));
+        return;
+      }
       const clockwise = (to - from + 8) % 8, step = clockwise <= 4 ? 1 : -1;
       let index = from;
       while (index !== to) { index = (index + step + 8) % 8; points.push(pointOnRing(r, index)); }
