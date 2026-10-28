@@ -91,7 +91,8 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     ctx.font = '180px sans-serif'; ctx.fillText(symbols[type], 128, 128);
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; return texture;
   }
-  box(scene, 0, -.35, 0, 180, .3, 180, '#1e2929');
+  // Keep the backdrop below recessed stairs so it does not hide the lower steps.
+  box(scene, 0, -.9, 0, 180, .3, 180, '#1e2929');
   function makeRoom(room: Room, hideName = false) {
     const group = new THREE.Group(); group.position.set(room.x * 3.2, 0, room.z * 3.2);
     const inside = new THREE.Group(); inside.rotation.y = -room.rotation * Math.PI / 2; group.add(inside);
@@ -152,9 +153,9 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
       }
       if (id === 'grand-staircase') {
         for (const x of [-.59, .59]) {
-          for (let i = 0; i < 4; i++) box(inside, x, .38 + i * .09, .55 - i * .38, .07, .45, .07, '#66513a');
-          const rail = box(inside, x, .66, -.03, .1, .09, 1.65, '#8c6b45');
-          rail.rotation.x = -.28;
+          for (let i = 0; i < 4; i++) box(inside, x, .5 + i * .23, .55 - i * .38, .07, .45, .07, '#66513a');
+          const rail = box(inside, x, 1.07, -.02, .1, .09, 1.45, '#8c6b45');
+          rail.rotation.x = .54;
         }
         box(inside, 0, .82, -.9, 1.35, .14, .36, '#8c765a');
       }
