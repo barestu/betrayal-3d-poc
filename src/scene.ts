@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Room, Door, Card, Deck, Floor, rotated, openings } from './model';
 
 const colors = { item: '#b89b60', event: '#7997a4', omen: '#a884b6' };
@@ -58,6 +62,20 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   box(explorer, .2, .59, 0, .09, .38, .1, '#476f73');
   const head = new THREE.Mesh(new THREE.SphereGeometry(.14, 16, 12), material('#d1a77d'));
   head.position.y = 1.02; head.castShadow = true; explorer.add(head);
+  const characterParts = [...explorer.children];
+  const wallRay = new THREE.Raycaster();
+  const outlineTarget = new THREE.Vector3();
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  const outlinePass = new OutlinePass(new THREE.Vector2(1, 1), scene, camera, characterParts);
+  outlinePass.visibleEdgeColor.set('#000000');
+  outlinePass.hiddenEdgeColor.set('#79c5c8');
+  outlinePass.edgeStrength = 4;
+  outlinePass.edgeThickness = 1;
+  composer.addPass(outlinePass);
+  const outputPass = new OutputPass();
+  composer.addPass(outputPass);
+
   const markerCanvas = document.createElement('canvas'); markerCanvas.width = markerCanvas.height = 128;
   const markerContext = markerCanvas.getContext('2d')!;
   markerContext.fillStyle = '#c6ece9'; markerContext.strokeStyle = '#294b4e'; markerContext.lineWidth = 7;
@@ -114,7 +132,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
       for (let i = -3; i <= 3; i++) box(inside, i * .4, .13, 0, .015, .008, 2.9, '#514d40');
     }
     for (let i = 0; i < 4; i++) {
-      const wall = new THREE.Group(); wall.rotation.y = -i * Math.PI / 2; wall.scale.y = wallHeight / .68; wall.position.y = .12 * (1 - wall.scale.y); inside.add(wall);
+      const wall = new THREE.Group(); wall.userData.wall = true; wall.rotation.y = -i * Math.PI / 2; wall.scale.y = wallHeight / .68; wall.position.y = .12 * (1 - wall.scale.y); inside.add(wall);
       if (rotated(room.tile.doors, 0).includes(i)) {
         box(wall, -.99, .46, -1.46, .94, .68, .13, '#b0a389'); box(wall, .99, .46, -1.46, .94, .68, .13, '#b0a389');
         box(wall, 0, .15, -1.46, 1, .04, .19, '#c1a875');
@@ -402,7 +420,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
   };
   renderer.domElement.addEventListener('pointerdown', pointerDown); renderer.domElement.addEventListener('pointerup', pointerUp);
   renderer.domElement.addEventListener('pointermove', pointerMove); renderer.domElement.addEventListener('pointerleave', pointerLeave);
-  const observer = new ResizeObserver(() => { renderer.setSize(host.clientWidth, host.clientHeight); cardRenderer.setSize(host.clientWidth, host.clientHeight); camera.aspect = host.clientWidth / host.clientHeight; camera.updateProjectionMatrix(); }); observer.observe(host);
+  const observer = new ResizeObserver(() => { renderer.setSize(host.clientWidth, host.clientHeight); composer.setSize(host.clientWidth, host.clientHeight); cardRenderer.setSize(host.clientWidth, host.clientHeight); camera.aspect = host.clientWidth / host.clientHeight; camera.updateProjectionMatrix(); }); observer.observe(host);
   renderer.setAnimationLoop(() => {
     if (moving) { const current = moving; const t = Math.min(1, (performance.now() - current.start) / current.duration); current.update(t); if (t === 1) { moving = undefined; current.done(); } }
     if (diceGroup) {
@@ -412,8 +430,18 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     }
     // OrbitControls damping keeps moving the camera even while input is disabled.
     if (!activeCard) controls.update();
-    renderer.render(scene, camera);
+    let wallObscuresExplorer = false;
+    if (explorer.visible) {
+      explorer.getWorldPosition(outlineTarget); outlineTarget.y += .6;
+      const direction = outlineTarget.clone().sub(camera.position);
+      wallRay.set(camera.position, direction.clone().normalize()); wallRay.far = direction.length();
+      const walls: THREE.Object3D[] = [];
+      board.traverse(object => { if (object.userData.wall) walls.push(object); });
+      wallObscuresExplorer = wallRay.intersectObjects(walls, true).length > 0;
+    }
+    outlinePass.selectedObjects = wallObscuresExplorer ? characterParts : [];
+    composer.render();
     cardRenderer.render(cardScene, camera);
   });
-  return { paint, preview, setWallHeight(value: number) { wallHeight = value; }, frame, moveCamera, moveExplorer, resetExplorer, rollDice, settle, deckStacks, draw, dismiss, cancel, dispose() { cancel(); observer.disconnect(); renderer.setAnimationLoop(null); controls.dispose(); clear(scene); renderer.dispose(); cardRenderer.dispose(); renderer.domElement.remove(); cardRenderer.domElement.remove(); } };
+  return { paint, preview, setWallHeight(value: number) { wallHeight = value; }, frame, moveCamera, moveExplorer, resetExplorer, rollDice, settle, deckStacks, draw, dismiss, cancel, dispose() { cancel(); observer.disconnect(); renderer.setAnimationLoop(null); controls.dispose(); outlinePass.dispose(); outputPass.dispose(); composer.dispose(); clear(scene); renderer.dispose(); cardRenderer.dispose(); renderer.domElement.remove(); cardRenderer.domElement.remove(); } };
 }
