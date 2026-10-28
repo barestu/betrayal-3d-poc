@@ -146,7 +146,7 @@ function App() {
         if (performanceDisplay.current) performanceDisplay.current.textContent = `${Math.round(frames * 1000 / (now - sampleStart))} FPS · JS heap ${memory ? `${Math.round(memory.usedJSHeapSize / 1048576)} MB` : "unavailable"}`;
         frames = 0; sampleStart = now;
       }
-      if (!state.current.busy && !state.current.card) {
+      if (!state.current.card) {
         const axis = (positive: string, negative: string) => Number(held.has(positive)) - Number(held.has(negative));
         const forward = axis('w', 's'), right = axis('d', 'a');
         const rotation = state.current.preview ? 0 : axis('q', 'e');
@@ -158,7 +158,7 @@ function App() {
     const keyboard = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).closest('button, input, select, textarea, [contenteditable="true"]')) return;
       const key = e.key.toLowerCase();
-      if (state.current.card || state.current.busy) { if (key === 'escape' && !e.repeat) actions.current.dismiss(); return; }
+      if (state.current.card) { if (key === 'escape' && !e.repeat) actions.current.dismiss(); return; }
       if (state.current.preview && (key === 'q' || key === 'e')) { if (!e.repeat) actions.current.rotate(key === 'q' ? -1 : 1); return; }
       if (key === 'w' || key === 's' || key === 'a' || key === 'd' || key === 'q' || key === 'e') {
         e.preventDefault(); held.add(key);
@@ -167,7 +167,7 @@ function App() {
       if (!e.repeat && key === '2') scene.current?.frame('topdown');
       if (!e.repeat && key === '3') scene.current?.frame('front');
       if (!e.repeat && key === '4') scene.current?.frame('recenter');
-      if (e.repeat) return;
+      if (e.repeat || state.current.busy) return;
       if (e.key === 'Enter') actions.current.place();
       if (e.key === 'Escape') { actions.current.cancelPreview(); actions.current.dismiss(); }
     };
@@ -189,7 +189,7 @@ function App() {
     </header>
     {devOpen && <section className="dev-panel" aria-label="Developer tools"><strong>Developer tools</strong><div className="wall-height"><span>Wall height</span><div className="wall-options" role="group" aria-label="Wall height">{([["Off", .08], ["Low", .34], ["Default", .68], ["High", 1.2], ["Very high", 1.7]] as const).map(([label, value]) => <button key={label} type="button" disabled={s.busy || !!s.card} aria-pressed={wallHeight === value} onClick={() => { setWallHeight(value); scene.current?.setWallHeight(value); refresh(); }}>{label}</button>)}</div></div><button disabled={locked} onClick={loadAllTiles}>Load all room tiles</button><button onClick={() => setShowPerformance(!showPerformance)}>{showPerformance ? "Hide" : "Show"} performance</button><button onClick={reset}>Reset scene</button><small>Adds remaining tiles to available doorways.</small></section>}
     <nav className="floors" aria-label="Floor">{(['upper', 'ground', 'basement'] as Floor[]).map((f, i) => <button key={f} className={s.floor === f ? 'selected' : ''} disabled={locked} onClick={() => floor(f)}><small>0{3 - i}</small>{f === 'upper' ? 'Upper floor' : f === 'ground' ? 'Ground floor' : 'Basement'}</button>)}</nav>
-    <div className="camera-bar"><div className="camera-controls" aria-label="Camera views"><span className="camera-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="4"/></svg></span><button className="quiet" disabled={s.busy || !!s.card} onClick={e => { scene.current?.frame('isometric'); e.currentTarget.blur(); }}>Isometric</button><button className="quiet" disabled={s.busy || !!s.card} onClick={e => { scene.current?.frame('topdown'); e.currentTarget.blur(); }}>Top-down</button><button className="quiet" disabled={s.busy || !!s.card} onClick={e => { scene.current?.frame('recenter'); e.currentTarget.blur(); }}>Recenter</button></div></div>
+    <div className="camera-bar"><div className="camera-controls" aria-label="Camera views"><span className="camera-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="4"/></svg></span><button className="quiet" disabled={!!s.card} onClick={e => { scene.current?.frame('isometric'); e.currentTarget.blur(); }}>Isometric</button><button className="quiet" disabled={!!s.card} onClick={e => { scene.current?.frame('topdown'); e.currentTarget.blur(); }}>Top-down</button><button className="quiet" disabled={!!s.card} onClick={e => { scene.current?.frame('recenter'); e.currentTarget.blur(); }}>Recenter</button></div></div>
     <Minimap rooms={s.rooms} floor={s.floor} />
     <section className="dice-roller" aria-label="Dice roller"><small>DICE ROLLER</small><div className="dice-controls"><label>Dice <input type="number" min="1" max="8" value={diceCount} onChange={e => setDiceCount(Math.max(1, Math.min(8, Number(e.target.value) || 1)))} /></label><button onClick={() => { const values = Array.from({ length: diceCount }, () => Math.floor(Math.random() * 3)); setDice(values); scene.current?.rollDice(values); }}>Roll</button></div>{dice.length > 0 && <div className="dice-result" aria-live="polite"><span>{dice.map((value, index) => <b key={index}>{value}</b>)}</span><strong>Total: {dice.reduce((sum, value) => sum + value, 0)}</strong></div>}</section>
     <aside className="info"><small>AN UNFINISHED HOUSE</small><h2>Open a door.<br />Let the dark in.</h2><p>Explore the house one room at a time. Click a gold ring or the dark space beyond it to explore a new room.</p><div className="stats"><div><strong>{s.rooms.filter(r => r.floor === s.floor).length.toString().padStart(2, '0')}</strong><span>rooms on floor</span></div><div><strong>{s.stack.length.toString().padStart(2, '0')}</strong><span>undiscovered</span></div></div></aside>
