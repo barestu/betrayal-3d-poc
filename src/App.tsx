@@ -1,7 +1,7 @@
 import React, { useEffect, useReducer, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createScene } from './scene';
-import { Card, Deck, Door, Floor, Room, content, rotated, shuffle, startingRooms } from './model';
+import { Card, Deck, Door, Floor, Room, content, openings, rotated, shuffle, startingRooms } from './model';
 import './style.css';
 
 function initial() {
@@ -32,6 +32,8 @@ function App() {
   const state = useRef(initial());
   const [hovered, setHovered] = useState<{ room: Room; x: number; y: number } | null>(null);
   const [exploreHint, setExploreHint] = useState<{ x: number; y: number } | null>(null);
+  const [devOpen, setDevOpen] = useState(false);
+  const [showPerformance, setShowPerformance] = useState(true);
   const [diceCount, setDiceCount] = useState(2);
   const [dice, setDice] = useState<number[]>([]);
   const [, render] = useReducer(n => n + 1, 0);
@@ -90,6 +92,33 @@ function App() {
     scene.current?.dismiss(() => { s.card = null; s.busy = false; s.message = 'Choose a doorway, or draw another card.'; refresh(); });
   }
   function reset() { scene.current?.cancel(); state.current = initial(); scene.current?.resetExplorer(); refresh(); scene.current?.frame(); }
+  function loadAllTiles() {
+    const s = state.current;
+    if (s.busy || s.card || s.preview) return;
+    const remaining = [...s.stack];
+    const floors: Floor[] = ['ground', 'upper', 'basement'];
+    let progress = true;
+    while (remaining.length && progress) {
+      progress = false;
+      for (let i = remaining.length - 1; i >= 0; i--) {
+        const tile = remaining[i];
+        let placed = false;
+        for (const floor of floors) {
+          if (!tile.floors.includes(floor)) continue;
+          for (const door of openings(s.rooms, floor)) {
+            const rotation = [0, 1, 2, 3].find(r => rotated(tile.doors, r).includes((door.direction + 2) % 4));
+            if (rotation === undefined) continue;
+            s.rooms.push({ tile, floor, x: door.x, z: door.z, rotation });
+            remaining.splice(i, 1); placed = progress = true; break;
+          }
+          if (placed) break;
+        }
+      }
+    }
+    s.stack = remaining;
+    s.message = remaining.length ? `Developer mode: ${remaining.length} tiles could not be placed.` : 'Developer mode: all room tiles loaded.';
+    refresh(); scene.current?.frame();
+  }
   function floor(value: Floor) { const s = state.current; if (s.busy || s.card || s.preview) return; s.floor = value; refresh(); scene.current?.frame(); }
   const actions = useRef({ rotate, place, cancelPreview, dismiss }); actions.current = { rotate, place, cancelPreview, dismiss };
   useEffect(() => {
@@ -150,13 +179,14 @@ function App() {
   const locked = s.busy || !!s.card || !!s.preview;
   return <main>
     <div ref={host} className="scene" />
-    <div ref={performanceDisplay} className="performance-display" aria-label="Performance">FPS · JS heap unavailable</div>
+    <div ref={performanceDisplay} className="performance-display" hidden={!showPerformance} aria-label="Performance">FPS · JS heap unavailable</div>
     {exploreHint && !locked && <div className="explore-hint" style={{ left: Math.min(exploreHint.x + 16, window.innerWidth - 150), top: Math.max(8, exploreHint.y - 40) }}>Click to explore</div>}
     {hovered && !s.preview && !s.card && !s.busy && hovered.room.floor === s.floor && <section className="room-hover panel" style={{ left: Math.min(hovered.x + 16, window.innerWidth - 300), top: Math.max(8, Math.min(hovered.y + 16, window.innerHeight - 220)) }}><small>ROOM INFORMATION</small><h2>{hovered.room.tile.name}</h2>{hovered.room.tile.blurb && <p>{hovered.room.tile.blurb}</p>}{hovered.room.tile.rules && <p>{hovered.room.tile.rules}</p>}{hovered.room.tile.cardIcon && <small><span className={`room-card-icon ${hovered.room.tile.cardIcon}`}>{hovered.room.tile.cardIcon === 'item' ? '◇' : hovered.room.tile.cardIcon === 'event' ? '≋' : '☾'}</span> DRAW {hovered.room.tile.cardIcon.toUpperCase()}</small>}</section>}
     <header>
       <div className="brand"><span className="sigil">⌘</span><div><small>BETRAYAL / SPATIAL STUDY</small><h1>The house unfolds<span>.</span></h1></div></div>
-      <div className="header-actions"><span className="badge">3D SANDBOX</span><button onClick={reset}>Reset ↺</button></div>
+      <div className="header-actions"><span className="badge">3D SANDBOX</span><button onClick={() => setDevOpen(!devOpen)} aria-expanded={devOpen}><span aria-hidden="true">⚙</span> Dev Tools</button><button onClick={reset}>Reset ↺</button></div>
     </header>
+    {devOpen && <section className="dev-panel" aria-label="Developer tools"><strong>Developer tools</strong><button disabled={locked} onClick={loadAllTiles}>Load all room tiles</button><button onClick={() => setShowPerformance(!showPerformance)}>{showPerformance ? "Hide" : "Show"} performance</button><button onClick={reset}>Reset scene</button><small>Adds remaining tiles to available doorways.</small></section>}
     <nav className="floors" aria-label="Floor">{(['upper', 'ground', 'basement'] as Floor[]).map((f, i) => <button key={f} className={s.floor === f ? 'selected' : ''} disabled={locked} onClick={() => floor(f)}><small>0{3 - i}</small>{f === 'upper' ? 'Upper floor' : f === 'ground' ? 'Ground floor' : 'Basement'}</button>)}</nav>
     <div className="camera-bar"><div className="camera-controls" aria-label="Camera views"><span className="camera-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="4"/></svg></span><button className="quiet" disabled={s.busy || !!s.card} onClick={e => { scene.current?.frame('isometric'); e.currentTarget.blur(); }}>Isometric</button><button className="quiet" disabled={s.busy || !!s.card} onClick={e => { scene.current?.frame('topdown'); e.currentTarget.blur(); }}>Top-down</button><button className="quiet" disabled={s.busy || !!s.card} onClick={e => { scene.current?.frame('recenter'); e.currentTarget.blur(); }}>Recenter</button></div></div>
     <Minimap rooms={s.rooms} floor={s.floor} />

@@ -18,3 +18,5 @@
 .scene .card-layer{position:fixed;inset:0;z-index:4;pointer-events:none}
 
 .performance-display{position:absolute;right:12px;bottom:8px;z-index:5;pointer-events:none;color:#c5d2c6;background:#111a1cbb;border-radius:4px;padding:5px 8px;font:11px monospace}
+
+.dev-panel{position:absolute;z-index:6;right:24px;top:90px;display:flex;flex-direction:column;gap:8px;width:220px;padding:16px;background:#172123f5;border:1px solid #536056;border-radius:8px}.dev-panel strong{font-size:13px}.dev-panel button{text-align:left;font-size:12px}.dev-panel small{line-height:1.5;letter-spacing:0}
