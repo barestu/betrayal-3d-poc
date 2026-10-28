@@ -150,9 +150,9 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     } else if (/bed|nursery|quarters/.test(id)) {
       box(inside, -.35, .3, -.15, 1.1, .35, 1.65, '#51473c'); box(inside, -.35, .52, -.15, 1.05, .15, 1.55, '#647b78'); box(inside, -.35, .63, -.68, .8, .12, .35, '#d3c9aa');
     } else if (/library|laboratory|storeroom|larder|wine|kitchen/.test(id)) {
-      for (const x of [-.9, .9]) { box(inside, x, .53, -.5, .48, .8, 1.25, '#51483a'); for (let i = 0; i < 4; i++) box(inside, x, .55, -.92 + i * .28, .5, .38, .16, ['#8b7655', '#586e67', '#9b6654'][i % 3]); }
+      for (const x of [-.43, .43]) { box(inside, x, .53, -.3, .3, .8, .8, '#51483a'); for (let i = 0; i < 4; i++) box(inside, x, .55, -.58 + i * .19, .32, .38, .14, ['#8b7655', '#586e67', '#9b6654'][i % 3]); }
     } else if (/crypt|grave|chapel|pentagram/.test(id)) {
-      box(inside, 0, .32, -.35, .9, .4, 1.35, '#929188'); box(inside, 0, .58, -.35, 1.05, .12, 1.48, '#b7b3a1');
+      box(inside, 0, .32, 0, .9, .4, 1.2, '#929188'); box(inside, 0, .58, 0, 1.05, .12, 1.3, '#b7b3a1');
     } else if (/lake|garden|conservatory|patio/.test(id)) {
       box(inside, 0, .16, -.15, 1.9, .06, 1.6, /lake/.test(id) ? '#427c86' : '#516b4c');
       for (const x of [-.7, .7]) box(inside, x, .4, -.65, .35, .5, .35, '#76835b');
@@ -260,7 +260,7 @@ export function createScene(host: HTMLElement, onDoor: (door: Door) => void, onD
     }
     walkRing(room, entry, 6);
     if (points.length === 1) { done(); return; }
-    animate(explorer, 180 * (points.length - 1), t => { const progress = t * (points.length - 1), index = Math.min(Math.floor(progress), points.length - 2); explorer.position.lerpVectors(points[index], points[index + 1], progress - index); explorer.position.y = Math.abs(Math.sin(progress * Math.PI * 2)) * .12; }, () => { explorer.position.y = 0; explorerRoom = { x: room.x, z: room.z }; done(); });
+    animate(explorer, 180 * (points.length - 1), t => { const progress = t * (points.length - 1), index = Math.min(Math.floor(progress), points.length - 2); explorer.position.lerpVectors(points[index], points[index + 1], progress - index); explorer.position.y = Math.abs(Math.sin(progress * Math.PI * 2)) * .04; }, () => { explorer.position.y = 0; explorerRoom = { x: room.x, z: room.z }; done(); });
   }
   function resetExplorer() { explorerFloor = 'ground'; explorerRoom = { x: 0, z: 0 }; explorer.position.set(-.8, 0, .5); explorer.visible = lastFloor === explorerFloor; }
   function rollDice(values: number[]) {
