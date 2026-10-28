@@ -4,3 +4,6 @@
 .room-card-icon{font-size:22px;vertical-align:middle;margin-right:4px}
 
 .minimap{right:32px;top:120px;width:180px;padding:12px;background:#172123e8;border:1px solid #536056;border-radius:8px;pointer-events:none}.minimap svg{display:block;width:100%;height:140px;margin-top:8px}.minimap rect{fill:#3b4943;stroke:#9b9f87;stroke-width:1}.minimap line{stroke:#e1c486;stroke-width:3}.minimap text{text-anchor:middle;font-size:18px;fill:#e7e5d7}.minimap text.item{fill:#c5ab70}.minimap text.event{fill:#8daeba}.minimap text.omen{fill:#b99ac8}@media(max-width:650px){.minimap{right:14px;top:100px;width:110px;padding:8px}.minimap svg{height:80px}.minimap small{font-size:8px;letter-spacing:1px}}
+
+.camera-bar{position:absolute;top:130px;left:440px}.camera-controls{display:flex;align-items:center;gap:3px;padding:4px;background:#111a1cbb;border:1px solid #394542;border-radius:7px}.camera-icon{padding:0 8px;color:#c9bd96;font-size:16px}.camera-controls button{border:0;padding:10px 9px}.camera-controls button:hover:enabled{background:#37423e}@media(max-width:1000px){.camera-bar{top:115px;left:424px}}@media(max-width:650px){.camera-bar{top:150px;left:18px}.camera-controls button{padding:8px}.camera-icon{padding:0 6px}}
+.camera-icon svg{display:block;width:18px;height:18px}
